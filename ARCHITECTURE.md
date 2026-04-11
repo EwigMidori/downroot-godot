@@ -612,7 +612,7 @@ public sealed class BaseGameContentPack : IContentPack
             Id = new ContentId("basegame:grass"),
             DisplayName = "Grass",
             SourcePack = PackId,
-            TileSourcePath = "basegame/assets/world/terrain/ground/grass.png",
+            TileSourcePath = "packs/basegame/assets/world/terrain/ground/grass.png",
             Kind = TerrainKind.Ground
         });
 
@@ -621,7 +621,7 @@ public sealed class BaseGameContentPack : IContentPack
             Id = new ContentId("basegame:log"),
             DisplayName = "Log",
             SourcePack = PackId,
-            IconPath = "basegame/assets/items/log.png",
+            IconPath = "packs/basegame/assets/items/log.png",
             MaxStack = 64
         });
 

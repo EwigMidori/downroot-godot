@@ -11,31 +11,31 @@
   * 时间系统：
     * 一天的昼夜长度从 6~72 小时不等，取决于随机种子。总是整数。昼夜长度也是随机，平均的概率极高，正态分布。晨昏时间为 1~2 小时。
   * 地面
-    * 素材使用草或者泥土。可使用 basegame\assets\world\terrain\ground\dirt.png （256x128）从中伪随机选取一个32x32 方格铺设地形。 和 basegame\assets\world\terrain\ground\grass.png （草的默认素材，32x32）
+    * 素材使用草或者泥土。可使用 packs\basegame\assets\world\terrain\ground\dirt.png （256x128）从中伪随机选取一个32x32 方格铺设地形。 和 packs\basegame\assets\world\terrain\ground\grass.png （草的默认素材，32x32）
     * 以上两种以 dirt 优先生成。二者应该用柏林噪声避免随机夹杂。
     * grass.png 是草生长程度为 0 时的样子。草有两种，grass1.png 和 grass2.png，两个素材高度均 32，grass1.png 从左到右放置了生长程度 2 4 6 的3个素材。grass2.png放置了生长程度1~6的6个素材。初始生长程度是随机的。
   * 传送门 Mod（用单独的实现）：依赖基础游戏。地图上会以低概率生成传送门，玩家进入对应格子之后传送门开始旋转并过渡到一个高维度世界
-    * 高维世界：类似三体中的维度碎片，是一个形状奇异的世界，面积从 9~256 平方格子不等，地面使用 basegame\assets\world\terrain\ground\dimfrag.png 材质
-    * 传送门材质：basegame\assets\world\nature\ruins\portal.png
+    * 高维世界：类似三体中的维度碎片，是一个形状奇异的世界，面积从 9~256 平方格子不等，地面使用 packs\basegame\assets\world\terrain\ground\dimfrag.png 材质
+    * 传送门材质：packs\basegame\assets\world\nature\ruins\portal.png
     * 到达可交互范围时，物品附近提示 `[F] Interact` 
   * 人物：
-    * 暂时只有主角色。素材在 basegame\assets\characters\humans\default\[idle|run].png，是 64x64，每行一个动画，四行分别是朝向下、左、右、上
+    * 暂时只有主角色。素材在 packs\basegame\assets\characters\humans\default\[idle|run].png，是 64x64，每行一个动画，四行分别是朝向下、左、右、上
     * 人类随身携带大小为 16 个物品。每个物品最大堆叠 64.
   * 敌对生物：
-    * 蠕虫：basegame\assets\world\nature\plants\worm.png 通过水平翻转得到另一帧动画，在地上蠕动。周围有人会攻击。可通过武器击杀。
-    * 蟑螂：basegame\assets\world\nature\plants\cockroach.png 白天看到人会逃走。夜间会移动并有小概率主动攻击周围的人。
+    * 蠕虫：packs\basegame\assets\world\nature\plants\worm.png 通过水平翻转得到另一帧动画，在地上蠕动。周围有人会攻击。可通过武器击杀。
+    * 蟑螂：packs\basegame\assets\world\nature\plants\cockroach.png 白天看到人会逃走。夜间会移动并有小概率主动攻击周围的人。
   * 受伤有闪红效果。
   * 植物：
-    * 地图的平地、泥土上随机生成 basegame\assets\world\nature\trees 中树的其中一种。每个树的材质为 32x32. 生成树时随机偏置 +-16个以内的像素且不与相邻的树重叠。
+    * 地图的平地、泥土上随机生成 packs\basegame\assets\world\nature\trees 中树的其中一种。每个树的材质为 32x32. 生成树时随机偏置 +-16个以内的像素且不与相邻的树重叠。
     * 植物的碰撞区域取底部1/4，注意启用 Y-sort
     * 砍树可以得到4~8个原木
     * 草/土上树旁边小概率生成原木，可直接拾取。
-    * 蓝莓：basegame\assets\world\nature\plants\blueberry_bush.png 16x16，在草上团簇生成，团簇面积 1~12 伽马分布。吃了增加10饱腹。
-    * 蘑菇：basegame\assets\world\nature\plants\brown_mushroom.png basegame\assets\world\nature\plants\white_mushroom.png 在泥上小概率生成单个，饱腹感 10.
+    * 蓝莓：packs\basegame\assets\world\nature\plants\blueberry_bush.png 16x16，在草上团簇生成，团簇面积 1~12 伽马分布。吃了增加10饱腹。
+    * 蘑菇：packs\basegame\assets\world\nature\plants\brown_mushroom.png packs\basegame\assets\world\nature\plants\white_mushroom.png 在泥上小概率生成单个，饱腹感 10.
   * 矿物：
     * 地图上会生成矿物。只在泥土单元格上方团簇生成，面积在 9~1024 平方格，伽马分布。
       这四种矿物会以高于地面一格的地形方式生成：
-      * 紫曜石 (Voidite，素材 basegame\assets\world\nature\ores\voidite.png，下同)：提炼得到 2 紫水晶。
+      * 紫曜石 (Voidite，素材 packs\basegame\assets\world\nature\ores\voidite.png，下同)：提炼得到 2 紫水晶。
       * 金沙岩 (Goldvein)：提炼得到 1 黄金 + 1 沙子。
       * 毒晶石 (Venomite)：提炼得到 1 毒水晶 + 1 铁块。
       * 寒冰晶 (Frost-Core)：提炼得到 2 冰水晶。只能在高维小世界生成。
@@ -74,7 +74,7 @@
   * 木围栏：消耗 1 原木。
   * 木围栏门：消耗 2 原木。
   * 木门：消耗 4 原木。可以阻挡敌对生物经过。
-  * 木箱：消耗 2 原木。可存放 32 个物品。每个物品堆叠最大 64.（素材：basegame\assets\production\storage\wooden_chest.png 32x32x2 从左到右是关闭和打开状态）
+  * 木箱：消耗 2 原木。可存放 32 个物品。每个物品堆叠最大 64.（素材：packs\basegame\assets\production\storage\wooden_chest.png 32x32x2 从左到右是关闭和打开状态）
 * 熔炉合成：
   * 紫曜石 -> 2 紫水晶。
   * 金沙岩 -> 1 黄金 + 1 沙子。
