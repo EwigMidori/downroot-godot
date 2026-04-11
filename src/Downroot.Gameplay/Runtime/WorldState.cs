@@ -9,36 +9,35 @@ public sealed class WorldState
     public IReadOnlyList<WorldEntityState> Entities => _entities;
     public float TimeOfDaySeconds { get; set; }
     public float TotalElapsedSeconds { get; set; }
-    public bool InventoryVisible { get; set; }
-    public bool CraftingVisible { get; set; }
+    public CraftWorkspaceMode WorkspaceMode { get; set; }
     public string? ActiveStationKey { get; set; }
     public EntityId? ActiveStationEntityId { get; set; }
-    public string InteractionPrompt { get; set; } = string.Empty;
-    public string StatusMessage { get; private set; } = string.Empty;
-    public float StatusMessageSeconds { get; private set; }
-    public float DestroyProgress01 { get; set; }
+    public InteractionContext? CurrentInteraction { get; set; }
+    public StatusEventState? ActiveStatusEvent { get; private set; }
+    public float ActiveStatusEventSeconds { get; private set; }
+    public DestroyProgressState? ActiveDestroyProgress { get; set; }
 
     public bool IsNight(float dayLengthSeconds) => TimeOfDaySeconds >= dayLengthSeconds * 0.5f;
 
     public void AddEntity(WorldEntityState entity) => _entities.Add(entity);
 
-    public void SetStatusMessage(string message, float seconds = 2f)
+    public void SetStatusEvent(StatusEventState statusEvent, float seconds = 2f)
     {
-        StatusMessage = message;
-        StatusMessageSeconds = seconds;
+        ActiveStatusEvent = statusEvent;
+        ActiveStatusEventSeconds = seconds;
     }
 
-    public void TickStatusMessage(float deltaSeconds)
+    public void TickStatusEvent(float deltaSeconds)
     {
-        if (StatusMessageSeconds <= 0f)
+        if (ActiveStatusEventSeconds <= 0f)
         {
             return;
         }
 
-        StatusMessageSeconds = Math.Max(0f, StatusMessageSeconds - deltaSeconds);
-        if (StatusMessageSeconds <= 0f)
+        ActiveStatusEventSeconds = Math.Max(0f, ActiveStatusEventSeconds - deltaSeconds);
+        if (ActiveStatusEventSeconds <= 0f)
         {
-            StatusMessage = string.Empty;
+            ActiveStatusEvent = null;
         }
     }
 

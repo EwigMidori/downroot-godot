@@ -17,8 +17,8 @@ public sealed class GodotInputService(Func<NumericsVector2> pointerProvider) : I
             Input.IsActionJustPressed("interact"),
             Input.IsMouseButtonPressed(MouseButton.Left),
             Input.IsMouseButtonPressed(MouseButton.Right),
-            Input.IsActionJustPressed("toggle_inventory"),
-            Input.IsActionJustPressed("toggle_crafting"),
+            false,
+            Input.IsActionJustPressed("toggle_craft_workspace"),
             Input.IsActionJustPressed("consume_selected"),
             GetScrollDelta(),
             GetDirectHotbarSlot());

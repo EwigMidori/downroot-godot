@@ -14,12 +14,12 @@ public sealed class GameSimulation(GameRuntime runtime)
 
     public void Tick(float deltaSeconds, InputFrame input)
     {
-        runtime.WorldState.TickStatusMessage(deltaSeconds);
+        runtime.WorldState.TickStatusEvent(deltaSeconds);
         ValidateActiveStation();
         UpdatePlayerMovement(deltaSeconds, input.Movement);
         UpdateHotbarSelection(input);
         UpdateWorldTime(deltaSeconds);
-        UpdateInteractionPrompt();
+        UpdateInteractionContext();
         HandleToggles(input);
         HandleInteract(input);
         HandleConsumption(input);
@@ -47,7 +47,7 @@ public sealed class GameSimulation(GameRuntime runtime)
         if (recipe.RequiredStationKey is not null && !IsStationAvailable(recipe.RequiredStationKey))
         {
             failureReason = $"{recipe.DisplayName} requires a nearby workbench.";
-            PublishCraftResult(recipe, false, failureReason);
+            PublishCraftResult(recipe, false, failureReason, new StatusEventState(StatusEventKind.StationRequired, recipe.Result.ItemId));
             return false;
         }
 
@@ -55,14 +55,14 @@ public sealed class GameSimulation(GameRuntime runtime)
         if (missingIngredient is not null)
         {
             failureReason = $"Missing {ShortName(missingIngredient.ItemId)} x{missingIngredient.Amount}.";
-            PublishCraftResult(recipe, false, failureReason);
+            PublishCraftResult(recipe, false, failureReason, new StatusEventState(StatusEventKind.MissingIngredient, missingIngredient.ItemId, missingIngredient.Amount));
             return false;
         }
 
         if (!runtime.Player.Inventory.CanAdd(recipe.Result.ItemId, recipe.Result.Amount, runtime.Content))
         {
             failureReason = $"No inventory space for {recipe.DisplayName}.";
-            PublishCraftResult(recipe, false, failureReason);
+            PublishCraftResult(recipe, false, failureReason, new StatusEventState(StatusEventKind.InventoryFull, recipe.Result.ItemId));
             return false;
         }
 
@@ -74,12 +74,12 @@ public sealed class GameSimulation(GameRuntime runtime)
         if (!runtime.Player.Inventory.TryAdd(recipe.Result.ItemId, recipe.Result.Amount, runtime.Content))
         {
             failureReason = $"Failed to add {recipe.DisplayName} to inventory.";
-            PublishCraftResult(recipe, false, failureReason);
+            PublishCraftResult(recipe, false, failureReason, new StatusEventState(StatusEventKind.CraftFailed, recipe.Result.ItemId));
             return false;
         }
 
         failureReason = string.Empty;
-        PublishCraftResult(recipe, true, $"Crafted {recipe.DisplayName}.");
+        PublishCraftResult(recipe, true, $"Crafted {recipe.DisplayName}.", new StatusEventState(StatusEventKind.CraftedItem, recipe.Result.ItemId, recipe.Result.Amount));
         return true;
     }
 
@@ -127,39 +127,40 @@ public sealed class GameSimulation(GameRuntime runtime)
         }
     }
 
-    private void UpdateInteractionPrompt()
+    private void UpdateInteractionContext()
     {
-        var target = GetNearestInteractable();
-        if (target is null)
+        runtime.WorldState.CurrentInteraction = GetNearestInteractable() switch
         {
-            runtime.WorldState.InteractionPrompt = string.Empty;
-            return;
-        }
-
-        runtime.WorldState.InteractionPrompt = target.Kind switch
-        {
-            WorldEntityKind.ResourceNode => BuildResourcePrompt(target),
-            WorldEntityKind.Placeable => BuildPlaceablePrompt(target),
-            WorldEntityKind.ItemDrop => BuildDropPrompt(target),
-            _ => "[F] Interact"
+            null => null,
+            { Kind: WorldEntityKind.ResourceNode } entity => CreateResourceInteractionContext(entity),
+            { Kind: WorldEntityKind.Placeable } entity => CreatePlaceableInteractionContext(entity),
+            { Kind: WorldEntityKind.ItemDrop } entity => new InteractionContext(entity.Id, entity.Kind, entity.DefinitionId, InteractionVerb.PickUp),
+            _ => null
         };
     }
 
     private void HandleToggles(InputFrame input)
     {
-        if (input.InventoryToggled)
-        {
-            runtime.WorldState.InventoryVisible = !runtime.WorldState.InventoryVisible;
-        }
-
         if (input.CraftPressed)
         {
-            runtime.WorldState.CraftingVisible = !runtime.WorldState.CraftingVisible;
-            if (!runtime.WorldState.CraftingVisible)
+            if (runtime.WorldState.WorkspaceMode != CraftWorkspaceMode.Hidden)
             {
+                runtime.WorldState.WorkspaceMode = CraftWorkspaceMode.Hidden;
                 runtime.WorldState.ActiveStationKey = null;
                 runtime.WorldState.ActiveStationEntityId = null;
+                return;
             }
+
+            if (TryGetNearbyCraftingStation(out var station))
+            {
+                var stationDef = runtime.Content.Placeables.Get(station.DefinitionId);
+                runtime.WorldState.ActiveStationKey = stationDef.CraftingStationKey;
+                runtime.WorldState.ActiveStationEntityId = station.Id;
+                runtime.WorldState.WorkspaceMode = CraftWorkspaceMode.Workbench;
+                return;
+            }
+
+            runtime.WorldState.WorkspaceMode = CraftWorkspaceMode.Handcraft;
         }
     }
 
@@ -258,20 +259,26 @@ public sealed class GameSimulation(GameRuntime runtime)
         var target = GetNearestDestructible();
         if (target is null || !input.DestroyHeld)
         {
-            runtime.WorldState.DestroyProgress01 = 0;
+            runtime.WorldState.ActiveDestroyProgress = null;
             return;
         }
 
         var breakDuration = Math.Max(1, target.Durability);
         target.DamageAccumulator += deltaSeconds;
-        runtime.WorldState.DestroyProgress01 = Math.Clamp(target.DamageAccumulator / breakDuration, 0f, 1f);
+        var progress = Math.Clamp(target.DamageAccumulator / breakDuration, 0f, 1f);
+        runtime.WorldState.ActiveDestroyProgress = new DestroyProgressState(
+            target.Id,
+            target.Kind,
+            target.DefinitionId,
+            target.Position,
+            progress);
         if (target.DamageAccumulator < breakDuration)
         {
             return;
         }
 
         DestroyEntity(target);
-        runtime.WorldState.DestroyProgress01 = 0f;
+        runtime.WorldState.ActiveDestroyProgress = null;
     }
 
     private void UpdateCreatures(float deltaSeconds)
@@ -304,7 +311,7 @@ public sealed class GameSimulation(GameRuntime runtime)
     private WorldEntityState? GetNearestInteractable()
     {
         return runtime.WorldState.Entities
-            .Where(entity => !entity.Removed && entity.Kind is WorldEntityKind.ResourceNode or WorldEntityKind.Placeable or WorldEntityKind.ItemDrop)
+            .Where(entity => !entity.Removed && IsInteractionEligible(entity))
             .OrderBy(entity => Vector2.Distance(entity.Position, runtime.Player.Position))
             .FirstOrDefault(entity => Vector2.Distance(entity.Position, runtime.Player.Position) <= InteractionRange);
     }
@@ -345,50 +352,12 @@ public sealed class GameSimulation(GameRuntime runtime)
         {
             runtime.WorldState.ActiveStationKey = def.CraftingStationKey;
             runtime.WorldState.ActiveStationEntityId = entity.Id;
-            runtime.WorldState.CraftingVisible = true;
+            runtime.WorldState.WorkspaceMode = CraftWorkspaceMode.Workbench;
         }
         else
         {
             entity.OpenState = !entity.OpenState;
         }
-    }
-
-    private string BuildResourcePrompt(WorldEntityState entity)
-    {
-        var def = runtime.Content.ResourceNodes.Get(entity.DefinitionId);
-        if (def.InstantPickup)
-        {
-            return $"[F] Pick up {def.DisplayName}";
-        }
-
-        if (def.DirectConsume)
-        {
-            return $"[F] Eat {def.DisplayName}";
-        }
-
-        return $"[LMB Hold] Break {def.DisplayName}";
-    }
-
-    private string BuildPlaceablePrompt(WorldEntityState entity)
-    {
-        var def = runtime.Content.Placeables.Get(entity.DefinitionId);
-        if (def.IsCraftingStation)
-        {
-            return $"[F] Use {def.DisplayName}";
-        }
-
-        if (def.HasOpenVariant)
-        {
-            return entity.OpenState ? $"[F] Close {def.DisplayName}" : $"[F] Open {def.DisplayName}";
-        }
-
-        return $"[LMB Hold] Break {def.DisplayName}";
-    }
-
-    private string BuildDropPrompt(WorldEntityState entity)
-    {
-        var def = runtime.Content.Items.Get(entity.DefinitionId);
-        return $"[F] Pick up {def.DisplayName}";
     }
 
     private void PickupDrop(WorldEntityState entity)
@@ -405,7 +374,7 @@ public sealed class GameSimulation(GameRuntime runtime)
         {
             runtime.WorldState.ActiveStationEntityId = null;
             runtime.WorldState.ActiveStationKey = null;
-            runtime.WorldState.CraftingVisible = false;
+            runtime.WorldState.WorkspaceMode = CraftWorkspaceMode.Hidden;
         }
 
         entity.Removed = true;
@@ -452,9 +421,9 @@ public sealed class GameSimulation(GameRuntime runtime)
         {
             runtime.WorldState.ActiveStationEntityId = null;
             runtime.WorldState.ActiveStationKey = null;
-            if (runtime.WorldState.CraftingVisible)
+            if (runtime.WorldState.WorkspaceMode == CraftWorkspaceMode.Workbench)
             {
-                runtime.WorldState.CraftingVisible = false;
+                runtime.WorldState.WorkspaceMode = CraftWorkspaceMode.Hidden;
             }
         }
     }
@@ -495,11 +464,78 @@ public sealed class GameSimulation(GameRuntime runtime)
             });
     }
 
-    private void PublishCraftResult(RecipeDef recipe, bool success, string message)
+    private void PublishCraftResult(RecipeDef recipe, bool success, string message, StatusEventState statusEvent)
     {
         var prefix = success ? "[Craft]" : "[Craft][Blocked]";
         Console.WriteLine($"{prefix} {recipe.Id.Value}: {message}");
-        runtime.WorldState.SetStatusMessage(message);
+        runtime.WorldState.SetStatusEvent(statusEvent);
+    }
+
+    private InteractionContext? CreateResourceInteractionContext(WorldEntityState entity)
+    {
+        var def = runtime.Content.ResourceNodes.Get(entity.DefinitionId);
+        if (def.DirectConsume)
+        {
+            return new InteractionContext(entity.Id, entity.Kind, entity.DefinitionId, InteractionVerb.Eat);
+        }
+
+        if (def.InstantPickup)
+        {
+            return new InteractionContext(entity.Id, entity.Kind, entity.DefinitionId, InteractionVerb.Gather);
+        }
+
+        return null;
+    }
+
+    private InteractionContext CreatePlaceableInteractionContext(WorldEntityState entity)
+    {
+        var def = runtime.Content.Placeables.Get(entity.DefinitionId);
+        if (def.IsCraftingStation)
+        {
+            return new InteractionContext(entity.Id, entity.Kind, entity.DefinitionId, InteractionVerb.Use);
+        }
+
+        if (def.HasOpenVariant)
+        {
+            return new InteractionContext(entity.Id, entity.Kind, entity.DefinitionId, entity.OpenState ? InteractionVerb.Close : InteractionVerb.Open);
+        }
+
+        return new InteractionContext(entity.Id, entity.Kind, entity.DefinitionId, InteractionVerb.Use);
+    }
+
+    private bool IsInteractionEligible(WorldEntityState entity)
+    {
+        return entity.Kind switch
+        {
+            WorldEntityKind.ItemDrop => true,
+            WorldEntityKind.Placeable => true,
+            WorldEntityKind.ResourceNode => IsResourceInteractionEligible(entity),
+            _ => false
+        };
+    }
+
+    private bool IsResourceInteractionEligible(WorldEntityState entity)
+    {
+        var def = runtime.Content.ResourceNodes.Get(entity.DefinitionId);
+        return def.InstantPickup || def.DirectConsume;
+    }
+
+    private bool TryGetNearbyCraftingStation(out WorldEntityState station)
+    {
+        station = runtime.WorldState.Entities
+            .Where(entity => !entity.Removed && entity.Kind == WorldEntityKind.Placeable)
+            .OrderBy(entity => Vector2.Distance(entity.Position, runtime.Player.Position))
+            .FirstOrDefault(entity =>
+            {
+                if (Vector2.Distance(entity.Position, runtime.Player.Position) > StationRange)
+                {
+                    return false;
+                }
+
+                return runtime.Content.Placeables.Get(entity.DefinitionId).IsCraftingStation;
+            })!;
+
+        return station is not null;
     }
 
     private static string ShortName(ContentId id) => id.Value.Split(':')[1].Replace('_', ' ');
