@@ -38,6 +38,7 @@ public partial class GameRoot : Node2D
     private ProgressBar? _destroyBar;
 
     private readonly Dictionary<EntityId, Sprite2D> _entitySprites = [];
+    private string? _craftingPanelStateKey;
     private string _lastFacing = "down";
 
     public override void _Ready()
@@ -351,30 +352,62 @@ public partial class GameRoot : Node2D
 
     private void RebuildCraftingPanel()
     {
-        foreach (var child in _craftingPanel!.GetChildren())
+        var isVisible = _runtime!.WorldState.CraftingVisible;
+        _craftingPanel!.Visible = isVisible;
+        if (!isVisible)
         {
-            child.QueueFree();
+            if (_craftingPanelStateKey is not null)
+            {
+                ClearCraftingPanel();
+                _craftingPanelStateKey = null;
+            }
+            return;
         }
 
-        _craftingPanel.Visible = _runtime!.WorldState.CraftingVisible;
-        if (!_craftingPanel.Visible)
+        var recipes = _simulation!.GetAvailableRecipes();
+        var panelStateKey = string.Join('|', new[]
+        {
+            _runtime.WorldState.ActiveStationKey ?? "handcraft",
+            string.Join(',', recipes.Select(recipe => recipe.Id.Value))
+        });
+
+        if (_craftingPanelStateKey == panelStateKey)
         {
             return;
         }
+
+        ClearCraftingPanel();
+        _craftingPanelStateKey = panelStateKey;
 
         _craftingPanel.AddChild(new Label
         {
             Text = _runtime.WorldState.ActiveStationKey is null ? "Handcraft" : $"Workbench Recipes"
         });
 
-        foreach (var recipe in _simulation!.GetAvailableRecipes())
+        foreach (var recipe in recipes)
         {
+            var recipeId = recipe.Id;
             var button = new Button
             {
                 Text = $"{recipe.DisplayName} ({string.Join(", ", recipe.Ingredients.Select(i => $"{ShortName(i.ItemId)} x{i.Amount}"))})"
             };
-            button.Pressed += () => _simulation.Craft(recipe.Id);
+            button.Pressed += () =>
+            {
+                if (_simulation.Craft(recipeId))
+                {
+                    _craftingPanelStateKey = null;
+                    RefreshHud();
+                }
+            };
             _craftingPanel.AddChild(button);
+        }
+    }
+
+    private void ClearCraftingPanel()
+    {
+        foreach (var child in _craftingPanel!.GetChildren())
+        {
+            child.QueueFree();
         }
     }
 
