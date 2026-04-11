@@ -1,5 +1,7 @@
 using Downroot.Core.Content;
 using Downroot.Core.Definitions;
+using Downroot.Core.Gameplay;
+using Downroot.Core.World;
 using Downroot.Content.Registries;
 
 namespace Downroot.Content.Registration;
@@ -15,4 +17,8 @@ public sealed class ContentRegistrar(ContentRegistrySet registries) : IContentRe
     public void RegisterCreature(CreatureDef creatureDef) => registries.Creatures.Register(creatureDef);
 
     public void RegisterTerrain(TerrainDef terrainDef) => registries.Terrains.Register(terrainDef);
+
+    public void RegisterWorldGenPass(WorldGenPassDef passDef) => registries.WorldGenPasses.Add(passDef);
+
+    public void SetBootstrapConfig(GameBootstrapConfig config) => registries.BootstrapConfig = config;
 }

@@ -1,4 +1,3 @@
-using Downroot.Content.Packs;
 using Downroot.Core.Ids;
 using Downroot.Core.Input;
 using Downroot.Game.Infrastructure;
@@ -63,18 +62,19 @@ public partial class GameRoot : Node2D
 
     private void ValidateAndRenderWorld(Node2D worldLayer, TextureContentLoader textureLoader, ContentLoadReport report)
     {
-        var grassDef = _runtime!.Content.Terrains.Get(new ContentId("basegame:grass"));
-        var dirtDef = _runtime.Content.Terrains.Get(new ContentId("basegame:dirt"));
-        var itemDef = _runtime.Content.Items.Get(new ContentId("basegame:stone"));
-        var placeableDef = _runtime.Content.Placeables.Get(new ContentId("basegame:wooden_chest"));
+        var config = _runtime!.BootstrapConfig;
+        var defaultTerrainDef = _runtime.Content.Terrains.Get(config.DefaultTerrainId);
+        var terrainVariantDef = _runtime.Content.Terrains.Get(config.DebugTerrainVariantId);
+        var itemDef = _runtime.Content.Items.Get(config.DebugItemId);
+        var placeableDef = _runtime.Content.Placeables.Get(config.DebugPlaceableId);
 
-        var grassTexture = textureLoader.LoadTerrain(grassDef);
-        var dirtTexture = textureLoader.LoadTerrain(dirtDef);
+        var defaultTerrainTexture = textureLoader.LoadTerrain(defaultTerrainDef);
+        var terrainVariantTexture = textureLoader.LoadTerrain(terrainVariantDef);
         var itemTexture = textureLoader.LoadItem(itemDef);
         var placeableTexture = textureLoader.LoadPlaceable(placeableDef);
 
-        report.AddSuccess(grassTexture.ContentId, grassTexture.AbsolutePath);
-        report.AddSuccess(dirtTexture.ContentId, dirtTexture.AbsolutePath);
+        report.AddSuccess(defaultTerrainTexture.ContentId, defaultTerrainTexture.AbsolutePath);
+        report.AddSuccess(terrainVariantTexture.ContentId, terrainVariantTexture.AbsolutePath);
         report.AddSuccess(itemTexture.ContentId, itemTexture.AbsolutePath);
         report.AddSuccess(placeableTexture.ContentId, placeableTexture.AbsolutePath);
 
@@ -82,12 +82,13 @@ public partial class GameRoot : Node2D
         {
             for (var x = 0; x < _runtime.World.Surface.Width; x++)
             {
-                var terrain = _runtime.World.Surface.GetTerrain(x, y)
+                var terrainId = _runtime.World.Surface.GetTerrainId(x, y)
                     ?? throw new InvalidOperationException($"Missing terrain at {x},{y}.");
+                var terrainDef = _runtime.Content.Terrains.Get(terrainId);
 
                 var sprite = new Sprite2D
                 {
-                    Texture = terrain.Id.Value == dirtDef.Id.Value ? dirtTexture.Texture : grassTexture.Texture,
+                    Texture = terrainDef.Id == terrainVariantDef.Id ? terrainVariantTexture.Texture : defaultTerrainTexture.Texture,
                     Centered = false,
                     Position = new Godot.Vector2(x * TileSize, y * TileSize)
                 };
@@ -101,14 +102,16 @@ public partial class GameRoot : Node2D
             Name = "PlaceablePreview",
             Texture = placeableTexture.Texture,
             Centered = false,
-            Position = new Godot.Vector2(5 * TileSize, 5 * TileSize)
+            Position = new Godot.Vector2(
+                config.DebugPlaceableSpawn.Tile.X * TileSize + config.DebugPlaceableSpawn.PixelOffsetX,
+                config.DebugPlaceableSpawn.Tile.Y * TileSize + config.DebugPlaceableSpawn.PixelOffsetY)
         };
         worldLayer.AddChild(chestPreview);
     }
 
     private void CreatePlayer(PlayerAnimationFactory animationFactory, ContentLoadReport report)
     {
-        var creature = _runtime!.Content.Creatures.Get(new ContentId("basegame:player_human"));
+        var creature = _runtime!.Content.Creatures.Get(_runtime.BootstrapConfig.PlayerCreatureId);
         var spriteFrames = animationFactory.Create(creature);
         report.AddSuccess(creature.Id.Value, "player animations loaded from idle/run spritesheets");
 
@@ -135,7 +138,7 @@ public partial class GameRoot : Node2D
         var label = new Label
         {
             Name = "DebugLabel",
-            Text = $"Phase 0 Runtime Ready\nPacks: {BaseGameContentPack.Id}\nWorldGen: fill-terrain + dirt-patch\n{report.ToDisplayText()}",
+            Text = $"Phase 0 Runtime Ready\nPacks loaded: {_runtime!.Content.WorldGenPasses.Count} world gen passes\n{report.ToDisplayText()}",
             Position = new Godot.Vector2(8, 8)
         };
 

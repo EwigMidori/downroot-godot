@@ -1,5 +1,7 @@
 using Downroot.Core.Definitions;
+using Downroot.Core.Gameplay;
 using Downroot.Core.Registries;
+using Downroot.Core.World;
 using Downroot.Content.Registration;
 
 namespace Downroot.Content.Registries;
@@ -13,6 +15,7 @@ public sealed class ContentRegistrySet
         Recipes = new Registry<RecipeDef>();
         Creatures = new Registry<CreatureDef>();
         Terrains = new Registry<TerrainDef>();
+        WorldGenPasses = new List<WorldGenPassDef>();
     }
 
     public IRegistry<ItemDef> Items { get; }
@@ -20,6 +23,8 @@ public sealed class ContentRegistrySet
     public IRegistry<RecipeDef> Recipes { get; }
     public IRegistry<CreatureDef> Creatures { get; }
     public IRegistry<TerrainDef> Terrains { get; }
+    public IList<WorldGenPassDef> WorldGenPasses { get; }
+    public GameBootstrapConfig? BootstrapConfig { get; set; }
 
     public ContentRegistrar CreateRegistrar() => new(this);
 }

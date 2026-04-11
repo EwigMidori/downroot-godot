@@ -8,13 +8,13 @@ public sealed class FillTerrainPass(string terrainId) : IWorldGenPass
 
     public void Execute(IWorldGenContext context)
     {
-        var terrain = context.GetTerrain(terrainId);
+        var terrainIdValue = context.GetTerrainId(terrainId);
 
         for (var y = 0; y < context.Height; y++)
         {
             for (var x = 0; x < context.Width; x++)
             {
-                context.SetTerrain(new TileCoord(x, y), terrain);
+                context.SetTerrain(new TileCoord(x, y), terrainIdValue);
             }
         }
     }

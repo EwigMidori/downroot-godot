@@ -2,7 +2,6 @@ using Downroot.Content.Packs;
 using Downroot.Content.Registries;
 using Downroot.Gameplay.Runtime;
 using Downroot.World.Generation;
-using Downroot.World.Generation.Passes;
 
 namespace Downroot.Gameplay.Bootstrap;
 
@@ -19,19 +18,23 @@ public sealed class GameBootstrapper
             pack.Register(registrar);
         }
 
-        var worldGenerator = new WorldGenerator(
-            registries,
-            [
-                new FillTerrainPass("basegame:grass"),
-                new DirtPatchPass("basegame:dirt")
-            ]);
+        var bootstrapConfig = registries.BootstrapConfig
+            ?? throw new InvalidOperationException("No bootstrap config was registered by any content pack.");
 
-        var world = worldGenerator.Generate(24, 16);
+        var worldPasses = registries.WorldGenPasses
+            .Select(WorldGenPassFactory.Create)
+            .ToArray();
+
+        var worldGenerator = new WorldGenerator(registries, worldPasses);
+
+        var world = worldGenerator.Generate(bootstrapConfig.WorldWidth, bootstrapConfig.WorldHeight);
         var player = new PlayerState
         {
-            Position = new System.Numerics.Vector2(24 * 16f, 16 * 16f)
+            Position = new System.Numerics.Vector2(
+                bootstrapConfig.PlayerSpawn.Tile.X * 32 + bootstrapConfig.PlayerSpawn.PixelOffsetX,
+                bootstrapConfig.PlayerSpawn.Tile.Y * 32 + bootstrapConfig.PlayerSpawn.PixelOffsetY)
         };
 
-        return new GameRuntime(registries, world, player);
+        return new GameRuntime(registries, world, player, bootstrapConfig);
     }
 }

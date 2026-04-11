@@ -1,4 +1,4 @@
-using Downroot.Core.Definitions;
+using Downroot.Core.Ids;
 
 namespace Downroot.Core.World;
 
@@ -6,6 +6,6 @@ public interface IWorldGenContext
 {
     int Width { get; }
     int Height { get; }
-    TerrainDef GetTerrain(string contentId);
-    void SetTerrain(TileCoord coord, TerrainDef terrainDef);
+    ContentId GetTerrainId(string contentId);
+    void SetTerrain(TileCoord coord, ContentId terrainId);
 }

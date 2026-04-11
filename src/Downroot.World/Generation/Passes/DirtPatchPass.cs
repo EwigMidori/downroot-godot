@@ -8,7 +8,7 @@ public sealed class DirtPatchPass(string terrainId) : IWorldGenPass
 
     public void Execute(IWorldGenContext context)
     {
-        var terrain = context.GetTerrain(terrainId);
+        var terrainIdValue = context.GetTerrainId(terrainId);
 
         for (var y = 0; y < context.Height; y++)
         {
@@ -16,7 +16,7 @@ public sealed class DirtPatchPass(string terrainId) : IWorldGenPass
             {
                 if ((x + y) % 7 == 0 || (x * 3 + y) % 11 == 0)
                 {
-                    context.SetTerrain(new TileCoord(x, y), terrain);
+                    context.SetTerrain(new TileCoord(x, y), terrainIdValue);
                 }
             }
         }
