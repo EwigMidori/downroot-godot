@@ -35,7 +35,6 @@ public sealed class HudController
     public void Refresh(GameRuntime runtime, Func<NumericsVector2, Vector2> worldToScreen)
     {
         var snapshot = _builder.Build(runtime, _simulation!);
-        _layoutResolver.Apply(_view, _host.GetViewport().GetVisibleRect().Size);
 
         _view.TimeOfDayLabel.Text = snapshot.HudStatus.TimeOfDayLabel;
         _view.NightOverlay.Color = new Color(0.03f, 0.05f, 0.15f, snapshot.HudStatus.IsNight ? 0.32f : 0f);
@@ -69,6 +68,8 @@ public sealed class HudController
             RebuildRecipeList(snapshot.CraftingPanel, runtime);
             _recipeStateKey = recipeStateKey;
         }
+
+        _layoutResolver.Apply(_view, _host.GetViewport().GetVisibleRect().Size);
 
         _view.ContextPromptPanel.Visible = snapshot.InteractionPrompt.IsVisible;
         _view.PromptKeyLabel.Text = snapshot.InteractionPrompt.PromptKeyLabel;
