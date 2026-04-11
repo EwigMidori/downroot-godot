@@ -28,7 +28,7 @@ public sealed partial class HudView : CanvasLayer
     public IReadOnlyList<SlotParts> HotbarSlots { get; }
     public PanelContainer HotbarPanel { get; }
     public PanelContainer PrimaryHelpPanel { get; }
-    public HBoxContainer HelpHintRow { get; }
+    public HFlowContainer HelpHintRow { get; }
     public PanelContainer StatusBanner { get; }
     public Label StatusMessageLabel { get; }
     public PanelContainer ContextPromptPanel { get; }
@@ -95,10 +95,10 @@ public sealed partial class HudView : CanvasLayer
             return slot;
         }).ToArray();
 
-        PrimaryHelpPanel = CreatePanel("PrimaryHelpPanel", Vector2.Zero, new Vector2(420, 68));
+        PrimaryHelpPanel = CreatePanel("PrimaryHelpPanel", Vector2.Zero, new Vector2(280, 96));
         HudRoot.AddChild(PrimaryHelpPanel);
-        HelpHintRow = new HBoxContainer { Name = "HelpHintRow" };
-        SetSeparation(HelpHintRow, 8);
+        HelpHintRow = new HFlowContainer { Name = "HelpHintRow" };
+        SetFlowSeparation(HelpHintRow, 8, 8);
         PrimaryHelpPanel.AddChild(HelpHintRow);
         AddHelpHint("WASD", "Move");
         AddHelpHint("F", "Interact");
@@ -578,5 +578,11 @@ public sealed partial class HudView : CanvasLayer
     private static void SetSeparation(BoxContainer container, int separation)
     {
         container.AddThemeConstantOverride("separation", separation);
+    }
+
+    private static void SetFlowSeparation(FlowContainer container, int horizontal, int vertical)
+    {
+        container.AddThemeConstantOverride("h_separation", horizontal);
+        container.AddThemeConstantOverride("v_separation", vertical);
     }
 }

@@ -18,7 +18,10 @@ public sealed class HudLayoutResolver
 
         var playerStatusSize = MaxSize(view.PlayerStatusPanel.GetCombinedMinimumSize(), new Vector2(236, 92));
         var hotbarSize = MaxSize(view.HotbarPanel.GetCombinedMinimumSize(), new Vector2(504, 72));
-        var helpSize = MaxSize(view.PrimaryHelpPanel.GetCombinedMinimumSize(), new Vector2(420, 68));
+        var helpWidthLimit = ResolveHelpWidthLimit(view, viewportSize);
+        view.PrimaryHelpPanel.Size = new Vector2(helpWidthLimit, view.PrimaryHelpPanel.Size.Y);
+        var helpSize = MaxSize(view.PrimaryHelpPanel.GetCombinedMinimumSize(), new Vector2(220, 68));
+        helpSize.X = Math.Min(helpSize.X, helpWidthLimit);
         var statusSize = MaxSize(view.StatusBanner.GetCombinedMinimumSize(), new Vector2(220, 40));
         var promptSize = MaxSize(view.ContextPromptPanel.GetCombinedMinimumSize(), new Vector2(260, 40));
         var workspaceWidth = Mathf.Clamp(viewportSize.X * 0.3f, WorkspaceMinWidth, WorkspaceMaxWidth);
@@ -29,9 +32,9 @@ public sealed class HudLayoutResolver
 
         LayoutTopLeft(view.PlayerStatusPanel, new Vector2(Margin, Margin), playerStatusSize);
         LayoutRightColumn(view.CraftWorkspacePanel, viewportSize, workspaceSize);
+        LayoutHelp(view, viewportSize, helpSize);
         LayoutTopCenter(view.StatusBanner, viewportSize, new Vector2(Math.Min(StatusMaxWidth, viewportSize.X - 2 * Margin), statusSize.Y));
         LayoutHotbar(view, viewportSize, hotbarSize);
-        LayoutHelp(view, viewportSize, helpSize);
         LayoutPrompt(view, viewportSize, promptSize);
     }
 
@@ -101,11 +104,6 @@ public sealed class HudLayoutResolver
     private static void LayoutHelp(HudView view, Vector2 viewportSize, Vector2 size)
     {
         var desired = new Vector2(Margin, viewportSize.Y - size.Y - Margin);
-        if (RectOverlaps(desired, size, view.HotbarPanel.Position, view.HotbarPanel.Size))
-        {
-            desired.Y = view.HotbarPanel.Position.Y - size.Y - Gap;
-        }
-
         desired.Y = Mathf.Clamp(desired.Y, Margin, Math.Max(Margin, viewportSize.Y - size.Y - Margin));
         view.PrimaryHelpPanel.Size = size;
         view.PrimaryHelpPanel.Position = desired;
@@ -141,6 +139,15 @@ public sealed class HudLayoutResolver
     private static Vector2 MaxSize(Vector2 value, Vector2 minimum)
     {
         return new Vector2(Math.Max(value.X, minimum.X), Math.Max(value.Y, minimum.Y));
+    }
+
+    private static float ResolveHelpWidthLimit(HudView view, Vector2 viewportSize)
+    {
+        var rightLimit = view.CraftWorkspacePanel.Visible
+            ? view.CraftWorkspacePanel.Position.X - Gap
+            : viewportSize.X - Margin;
+        var available = Math.Max(220f, rightLimit - Margin - 260f);
+        return Math.Clamp(Math.Min(available, viewportSize.X * 0.28f), 220f, 300f);
     }
 
     private static bool RectOverlaps(Vector2 aPos, Vector2 aSize, Vector2 bPos, Vector2 bSize)
