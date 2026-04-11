@@ -55,9 +55,6 @@ public sealed class GameBootstrapper
             }
         }
 
-        player.Inventory.TryAdd(new Core.Ids.ContentId("basegame:log"), 6, registries);
-        player.Inventory.TryAdd(new Core.Ids.ContentId("basegame:stone"), 4, registries);
-
         return new GameRuntime(registries, world, worldState, player, bootstrapConfig);
     }
 }

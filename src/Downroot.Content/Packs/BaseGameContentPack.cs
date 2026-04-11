@@ -42,11 +42,11 @@ public sealed class BaseGameContentPack : IContentPack
         registrar.RegisterTerrain(new TerrainDef(grassId, "Grass", PackId, "packs/basegame/assets/world/terrain/ground/grass.png", 32, 32, 0, 0));
         registrar.RegisterTerrain(new TerrainDef(dirtId, "Dirt", PackId, "packs/basegame/assets/world/terrain/ground/dirt.png", 32, 32, 0, 0));
 
-        registrar.RegisterPlaceable(new PlaceableDef(workbenchPlaceableId, "Workbench", PackId, "packs/basegame/assets/production/workstations/workbench.png", 28, 32, 0, 0, 3, true, "workbench"));
+        registrar.RegisterPlaceable(new PlaceableDef(workbenchPlaceableId, "Workbench", PackId, "packs/basegame/assets/production/workstations/workbench.png", 28, 32, 0, 0, 3, true, "workbench", true));
         registrar.RegisterPlaceable(new PlaceableDef(torchPlaceableId, "Torch", PackId, "packs/basegame/assets/items/torch.png", 16, 16, 0, 0, 1));
-        registrar.RegisterPlaceable(new PlaceableDef(chestPlaceableId, "Wooden Chest", PackId, "packs/basegame/assets/production/storage/wooden_chest.png", 32, 32, 0, 0, 3));
+        registrar.RegisterPlaceable(new PlaceableDef(chestPlaceableId, "Wooden Chest", PackId, "packs/basegame/assets/production/storage/wooden_chest.png", 32, 32, 0, 0, 3, false, null, true));
         registrar.RegisterPlaceable(new PlaceableDef(doorPlaceableId, "Wooden Door", PackId, "packs/basegame/assets/structures/doors/wood_door_close_open.png", 32, 32, 0, 0, 3, false, null, true));
-        registrar.RegisterPlaceable(new PlaceableDef(fencePlaceableId, "Wooden Fence", PackId, "packs/basegame/assets/structures/fences/wood_fence_horizontal.png", 32, 32, 0, 0, 2));
+        registrar.RegisterPlaceable(new PlaceableDef(fencePlaceableId, "Wooden Fence", PackId, "packs/basegame/assets/structures/fences/wood_fence_horizontal.png", 32, 32, 0, 0, 2, false, null, true));
 
         registrar.RegisterItem(new ItemDef(logItemId, "Log", PackId, "packs/basegame/assets/items/log_item.png", 28, 32, 99));
         registrar.RegisterItem(new ItemDef(stoneItemId, "Stone", PackId, "packs/basegame/assets/items/stone_item.png", 16, 16, 99));
@@ -124,15 +124,15 @@ public sealed class BaseGameContentPack : IContentPack
             new ContentId("basegame:craft_workbench"),
             "Workbench",
             PackId,
-            [new ItemAmount(logItemId, 4)],
+            [new ItemAmount(logItemId, 4), new ItemAmount(stoneItemId, 1)],
             new ItemAmount(workbenchItemId, 1)));
 
         registrar.RegisterRecipe(new RecipeDef(
             new ContentId("basegame:craft_torch"),
             "Torch",
             PackId,
-            [new ItemAmount(logItemId, 1), new ItemAmount(blueberryItemId, 1)],
-            new ItemAmount(torchItemId, 2)));
+            [new ItemAmount(logItemId, 1), new ItemAmount(stoneItemId, 1)],
+            new ItemAmount(torchItemId, 1)));
 
         registrar.RegisterRecipe(new RecipeDef(
             new ContentId("basegame:craft_chest"),

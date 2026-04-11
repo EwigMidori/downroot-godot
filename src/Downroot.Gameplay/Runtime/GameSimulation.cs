@@ -9,9 +9,12 @@ namespace Downroot.Gameplay.Runtime;
 public sealed class GameSimulation(GameRuntime runtime)
 {
     private const float InteractionRange = 48f;
+    private const float StationRange = 56f;
+    private const float BlockingRadius = 18f;
 
     public void Tick(float deltaSeconds, InputFrame input)
     {
+        ValidateActiveStation();
         UpdatePlayerMovement(deltaSeconds, input.Movement);
         UpdateHotbarSelection(input);
         UpdateWorldTime(deltaSeconds);
@@ -28,14 +31,14 @@ public sealed class GameSimulation(GameRuntime runtime)
     public IReadOnlyList<RecipeDef> GetAvailableRecipes()
     {
         return runtime.Content.Recipes.All
-            .Where(recipe => recipe.RequiredStationKey is null || recipe.RequiredStationKey == runtime.WorldState.ActiveStationKey)
+            .Where(recipe => recipe.RequiredStationKey is null || IsStationAvailable(recipe.RequiredStationKey))
             .ToArray();
     }
 
     public bool Craft(ContentId recipeId)
     {
         var recipe = runtime.Content.Recipes.Get(recipeId);
-        if (recipe.RequiredStationKey is not null && recipe.RequiredStationKey != runtime.WorldState.ActiveStationKey)
+        if (recipe.RequiredStationKey is not null && !IsStationAvailable(recipe.RequiredStationKey))
         {
             return false;
         }
@@ -59,7 +62,7 @@ public sealed class GameSimulation(GameRuntime runtime)
         {
             var normalized = Vector2.Normalize(movement);
             runtime.Player.Facing = normalized;
-            runtime.Player.Position += normalized * runtime.Player.Speed * deltaSeconds;
+            runtime.Player.Position = MoveWithCollision(runtime.Player.Position, normalized * runtime.Player.Speed * deltaSeconds);
         }
     }
 
@@ -116,6 +119,7 @@ public sealed class GameSimulation(GameRuntime runtime)
             if (!runtime.WorldState.CraftingVisible)
             {
                 runtime.WorldState.ActiveStationKey = null;
+                runtime.WorldState.ActiveStationEntityId = null;
             }
         }
     }
@@ -196,6 +200,11 @@ public sealed class GameSimulation(GameRuntime runtime)
             return;
         }
 
+        if (IsBlocked(tile))
+        {
+            return;
+        }
+
         var placeableDef = runtime.Content.Placeables.Get(itemDef.PlaceableId.Value);
         runtime.WorldState.AddEntity(new WorldEntityState(
             WorldEntityKind.Placeable,
@@ -248,7 +257,7 @@ public sealed class GameSimulation(GameRuntime runtime)
             var direction = runtime.Player.Position - creature.Position;
             if (direction != Vector2.Zero)
             {
-                creature.Position += Vector2.Normalize(direction) * def.MoveSpeed * deltaSeconds;
+                creature.Position = MoveWithCollision(creature.Position, Vector2.Normalize(direction) * def.MoveSpeed * deltaSeconds, creature.Id);
             }
 
             creature.AiAccumulator += deltaSeconds;
@@ -303,6 +312,7 @@ public sealed class GameSimulation(GameRuntime runtime)
         if (def.IsCraftingStation && def.CraftingStationKey is not null)
         {
             runtime.WorldState.ActiveStationKey = def.CraftingStationKey;
+            runtime.WorldState.ActiveStationEntityId = entity.Id;
             runtime.WorldState.CraftingVisible = true;
         }
         else
@@ -321,6 +331,13 @@ public sealed class GameSimulation(GameRuntime runtime)
 
     private void DestroyEntity(WorldEntityState entity)
     {
+        if (runtime.WorldState.ActiveStationEntityId == entity.Id)
+        {
+            runtime.WorldState.ActiveStationEntityId = null;
+            runtime.WorldState.ActiveStationKey = null;
+            runtime.WorldState.CraftingVisible = false;
+        }
+
         entity.Removed = true;
 
         switch (entity.Kind)
@@ -340,5 +357,70 @@ public sealed class GameSimulation(GameRuntime runtime)
                 }
                 break;
         }
+    }
+
+    private bool IsStationAvailable(string? stationKey)
+    {
+        if (stationKey is null)
+        {
+            return true;
+        }
+
+        ValidateActiveStation();
+        return runtime.WorldState.ActiveStationKey == stationKey && runtime.WorldState.ActiveStationEntityId is not null;
+    }
+
+    private void ValidateActiveStation()
+    {
+        if (runtime.WorldState.ActiveStationEntityId is not { } activeId)
+        {
+            return;
+        }
+
+        var entity = runtime.WorldState.Entities.FirstOrDefault(candidate => !candidate.Removed && candidate.Id == activeId);
+        if (entity is null || Vector2.Distance(entity.Position, runtime.Player.Position) > StationRange)
+        {
+            runtime.WorldState.ActiveStationEntityId = null;
+            runtime.WorldState.ActiveStationKey = null;
+            if (runtime.WorldState.CraftingVisible)
+            {
+                runtime.WorldState.CraftingVisible = false;
+            }
+        }
+    }
+
+    private Vector2 MoveWithCollision(Vector2 currentPosition, Vector2 delta, Downroot.Core.Ids.EntityId? ignoreEntityId = null)
+    {
+        var desired = currentPosition + delta;
+        var slideX = new Vector2(desired.X, currentPosition.Y);
+        var slideY = new Vector2(currentPosition.X, desired.Y);
+
+        if (!IsBlocked(desired, ignoreEntityId))
+        {
+            return desired;
+        }
+
+        if (!IsBlocked(slideX, ignoreEntityId))
+        {
+            return slideX;
+        }
+
+        if (!IsBlocked(slideY, ignoreEntityId))
+        {
+            return slideY;
+        }
+
+        return currentPosition;
+    }
+
+    private bool IsBlocked(Vector2 position, Downroot.Core.Ids.EntityId? ignoreEntityId = null)
+    {
+        return runtime.WorldState.Entities
+            .Where(entity => !entity.Removed && entity.Kind == WorldEntityKind.Placeable && entity.Id != ignoreEntityId)
+            .Any(entity =>
+            {
+                var def = runtime.Content.Placeables.Get(entity.DefinitionId);
+                return def.BlocksMovement && Vector2.Distance(entity.Position, position) < BlockingRadius;
+            });
     }
 }

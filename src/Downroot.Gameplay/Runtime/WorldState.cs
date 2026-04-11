@@ -1,3 +1,5 @@
+using Downroot.Core.Ids;
+
 namespace Downroot.Gameplay.Runtime;
 
 public sealed class WorldState
@@ -10,6 +12,7 @@ public sealed class WorldState
     public bool InventoryVisible { get; set; }
     public bool CraftingVisible { get; set; }
     public string? ActiveStationKey { get; set; }
+    public EntityId? ActiveStationEntityId { get; set; }
     public string InteractionPrompt { get; set; } = string.Empty;
     public float DestroyProgress01 { get; set; }
 
