@@ -12,6 +12,7 @@ public sealed class HudController
     private readonly Node _host;
     private readonly TextureContentLoader _textureLoader;
     private readonly GamePresentationBuilder _builder = new();
+    private readonly HudLayoutResolver _layoutResolver = new();
     private readonly Dictionary<string, Texture2D> _itemIconCache = [];
     private readonly HudView _view = new();
     private GameSimulation? _simulation;
@@ -34,6 +35,7 @@ public sealed class HudController
     public void Refresh(GameRuntime runtime, Func<NumericsVector2, Vector2> worldToScreen)
     {
         var snapshot = _builder.Build(runtime, _simulation!);
+        _layoutResolver.Apply(_view, _host.GetViewport().GetVisibleRect().Size);
 
         _view.TimeOfDayLabel.Text = snapshot.HudStatus.TimeOfDayLabel;
         _view.NightOverlay.Color = new Color(0.03f, 0.05f, 0.15f, snapshot.HudStatus.IsNight ? 0.32f : 0f);
@@ -83,7 +85,10 @@ public sealed class HudController
             _view.DestroyTargetLabel.Text = snapshot.DestroyProgress.DestroyTargetLabel;
             _view.SetBarValue(_view.DestroyProgressWidget, snapshot.DestroyProgress.Progress01);
             var screenPosition = worldToScreen(snapshot.DestroyProgress.WorldPosition);
-            _view.DestroyProgressPanel.Position = screenPosition + new Vector2(-80, -44);
+            _view.DestroyProgressPanel.Position = _layoutResolver.ResolveDestroyPanelPosition(
+                _view,
+                _host.GetViewport().GetVisibleRect().Size,
+                screenPosition);
         }
     }
 

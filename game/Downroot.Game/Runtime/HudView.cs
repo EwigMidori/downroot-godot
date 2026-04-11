@@ -20,11 +20,14 @@ public sealed partial class HudView : CanvasLayer
 
     public Control HudRoot { get; }
     public ColorRect NightOverlay { get; }
+    public PanelContainer PlayerStatusPanel { get; }
     public Label TimeOfDayLabel { get; }
     public BarParts HealthBarWidget { get; }
     public BarParts HungerBarWidget { get; }
     public HBoxContainer HotbarSlotRow { get; }
     public IReadOnlyList<SlotParts> HotbarSlots { get; }
+    public PanelContainer HotbarPanel { get; }
+    public PanelContainer PrimaryHelpPanel { get; }
     public HBoxContainer HelpHintRow { get; }
     public PanelContainer StatusBanner { get; }
     public Label StatusMessageLabel { get; }
@@ -68,10 +71,10 @@ public sealed partial class HudView : CanvasLayer
         };
         AddChild(HudRoot);
 
-        var playerStatusPanel = CreatePanel("PlayerStatusPanel", new Vector2(16, 16), new Vector2(236, 92));
-        HudRoot.AddChild(playerStatusPanel);
+        PlayerStatusPanel = CreatePanel("PlayerStatusPanel", new Vector2(16, 16), new Vector2(236, 92));
+        HudRoot.AddChild(PlayerStatusPanel);
         var playerStatusStack = new VBoxContainer();
-        playerStatusPanel.AddChild(playerStatusStack);
+        PlayerStatusPanel.AddChild(playerStatusStack);
 
         TimeOfDayLabel = new Label { Name = "TimeOfDayLabel" };
         playerStatusStack.AddChild(TimeOfDayLabel);
@@ -80,11 +83,11 @@ public sealed partial class HudView : CanvasLayer
         HungerBarWidget = CreateBar("HungerBarWidget", 208, new Color(0.88f, 0.7f, 0.18f));
         playerStatusStack.AddChild(HungerBarWidget.BarRoot);
 
-        var hotbarPanel = CreateAnchoredPanel("HotbarPanel", 0.5f, 1f, new Vector4(-252, -88, 252, -16));
-        HudRoot.AddChild(hotbarPanel);
+        HotbarPanel = CreatePanel("HotbarPanel", Vector2.Zero, new Vector2(504, 72));
+        HudRoot.AddChild(HotbarPanel);
         HotbarSlotRow = new HBoxContainer { Name = "HotbarSlotRow" };
         SetSeparation(HotbarSlotRow, 8);
-        hotbarPanel.AddChild(HotbarSlotRow);
+        HotbarPanel.AddChild(HotbarSlotRow);
         HotbarSlots = Enumerable.Range(0, 8).Select(index =>
         {
             var slot = CreateSlot(index == 0 ? "HotbarSlotWidget" : $"HotbarSlotWidget{index + 1}", 52, true);
@@ -92,18 +95,18 @@ public sealed partial class HudView : CanvasLayer
             return slot;
         }).ToArray();
 
-        var helpPanel = CreateAnchoredPanel("PrimaryHelpPanel", 0f, 1f, new Vector4(16, -84, 420, -16));
-        HudRoot.AddChild(helpPanel);
+        PrimaryHelpPanel = CreatePanel("PrimaryHelpPanel", Vector2.Zero, new Vector2(420, 68));
+        HudRoot.AddChild(PrimaryHelpPanel);
         HelpHintRow = new HBoxContainer { Name = "HelpHintRow" };
         SetSeparation(HelpHintRow, 8);
-        helpPanel.AddChild(HelpHintRow);
+        PrimaryHelpPanel.AddChild(HelpHintRow);
         AddHelpHint("WASD", "Move");
         AddHelpHint("F", "Interact");
         AddHelpHint("E", "Craft");
         AddHelpHint("RMB", "Place");
         AddHelpHint("LMB Hold", "Break");
 
-        StatusBanner = CreateAnchoredPanel("StatusBanner", 0.5f, 0f, new Vector4(-168, 16, 168, 56));
+        StatusBanner = CreatePanel("StatusBanner", Vector2.Zero, new Vector2(336, 40));
         StatusBanner.Visible = false;
         HudRoot.AddChild(StatusBanner);
         StatusMessageLabel = new Label
@@ -113,7 +116,7 @@ public sealed partial class HudView : CanvasLayer
         };
         StatusBanner.AddChild(StatusMessageLabel);
 
-        ContextPromptPanel = CreateAnchoredPanel("ContextPromptPanel", 0.5f, 1f, new Vector4(-162, -144, 162, -104));
+        ContextPromptPanel = CreatePanel("ContextPromptPanel", Vector2.Zero, new Vector2(324, 40));
         ContextPromptPanel.Visible = false;
         HudRoot.AddChild(ContextPromptPanel);
         var promptRow = new HBoxContainer();
@@ -148,7 +151,7 @@ public sealed partial class HudView : CanvasLayer
         DestroyProgressWidget = CreateBar("DestroyProgressWidget", 132, new Color(0.94f, 0.58f, 0.2f));
         destroyStack.AddChild(DestroyProgressWidget.BarRoot);
 
-        CraftWorkspacePanel = CreateAnchoredPanel("CraftWorkspacePanel", 1f, 0f, new Vector4(-380, 16, -16, 520));
+        CraftWorkspacePanel = CreatePanel("CraftWorkspacePanel", Vector2.Zero, new Vector2(364, 504));
         CraftWorkspacePanel.Visible = false;
         HudRoot.AddChild(CraftWorkspacePanel);
         var workspaceStack = new VBoxContainer();
@@ -488,24 +491,6 @@ public sealed partial class HudView : CanvasLayer
             Name = name,
             Position = position,
             Size = size
-        };
-        panel.AddThemeStyleboxOverride("panel", CreatePanelStyle(new Color(0.09f, 0.11f, 0.15f, 0.92f), new Color(0.24f, 0.28f, 0.34f)));
-        return panel;
-    }
-
-    private static PanelContainer CreateAnchoredPanel(string name, float anchorX, float anchorY, Vector4 offsets)
-    {
-        var panel = new PanelContainer
-        {
-            Name = name,
-            AnchorLeft = anchorX,
-            AnchorTop = anchorY,
-            AnchorRight = anchorX,
-            AnchorBottom = anchorY,
-            OffsetLeft = offsets.X,
-            OffsetTop = offsets.Y,
-            OffsetRight = offsets.Z,
-            OffsetBottom = offsets.W
         };
         panel.AddThemeStyleboxOverride("panel", CreatePanelStyle(new Color(0.09f, 0.11f, 0.15f, 0.92f), new Color(0.24f, 0.28f, 0.34f)));
         return panel;
