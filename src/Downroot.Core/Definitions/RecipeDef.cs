@@ -6,5 +6,6 @@ public sealed record RecipeDef(
     ContentId Id,
     string DisplayName,
     string SourcePackId,
-    IReadOnlyList<ContentId> IngredientIds,
-    ContentId ResultItemId) : ContentDef(Id, DisplayName, SourcePackId);
+    IReadOnlyList<ItemAmount> Ingredients,
+    ItemAmount Result,
+    string? RequiredStationKey = null) : ContentDef(Id, DisplayName, SourcePackId);

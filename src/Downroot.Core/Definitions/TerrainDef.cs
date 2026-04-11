@@ -1,7 +1,9 @@
+using Downroot.Core.Ids;
+
 namespace Downroot.Core.Definitions;
 
 public sealed record TerrainDef(
-    Downroot.Core.Ids.ContentId Id,
+    ContentId Id,
     string DisplayName,
     string SourcePackId,
     string TexturePath,

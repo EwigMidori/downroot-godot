@@ -8,4 +8,5 @@ public interface IWorldGenContext
     int Height { get; }
     bool HasTerrain(ContentId contentId);
     void SetTerrain(TileCoord coord, ContentId terrainId);
+    void AddSpawn(TileCoord coord, ContentId contentId);
 }

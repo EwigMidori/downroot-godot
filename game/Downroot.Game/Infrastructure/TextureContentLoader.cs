@@ -22,18 +22,41 @@ public sealed class TextureContentLoader(PackPathResolver packPathResolver)
         return texture with { Texture = atlas };
     }
 
-    public TextureLoadResult LoadItem(ItemDef itemDef) => LoadTexture(itemDef.Id.Value, itemDef.IconPath);
+    public TextureLoadResult LoadItem(ItemDef itemDef)
+    {
+        var texture = LoadTexture(itemDef.Id.Value, itemDef.IconPath);
+        return texture with
+        {
+            Texture = ToAtlas(texture.Texture, itemDef.IconWidth, itemDef.IconHeight, 0, 0)
+        };
+    }
 
     public TextureLoadResult LoadPlaceable(PlaceableDef placeableDef)
     {
         var texture = LoadTexture(placeableDef.Id.Value, placeableDef.SpritePath);
-        var atlas = new AtlasTexture
+        return texture with
         {
-            Atlas = texture.Texture,
-            Region = new Rect2(0, 0, 32, 32)
+            Texture = ToAtlas(texture.Texture, placeableDef.SpriteWidth, placeableDef.SpriteHeight, placeableDef.AtlasColumn, placeableDef.AtlasRow)
         };
+    }
 
-        return texture with { Texture = atlas };
+    public TextureLoadResult LoadResourceNode(ResourceNodeDef resourceNodeDef)
+    {
+        var texture = LoadTexture(resourceNodeDef.Id.Value, resourceNodeDef.SpritePath);
+        return texture with
+        {
+            Texture = ToAtlas(texture.Texture, resourceNodeDef.SpriteWidth, resourceNodeDef.SpriteHeight, resourceNodeDef.AtlasColumn, resourceNodeDef.AtlasRow)
+        };
+    }
+
+    public TextureLoadResult LoadCreature(CreatureDef creatureDef)
+    {
+        var path = creatureDef.WorldSpritePath ?? creatureDef.IdleSpriteSheetPath;
+        var texture = LoadTexture(creatureDef.Id.Value, path);
+        return texture with
+        {
+            Texture = ToAtlas(texture.Texture, creatureDef.SpriteWidth, creatureDef.SpriteHeight, 0, 0)
+        };
     }
 
     public TextureLoadResult LoadTexture(string contentId, string packRelativePath)
@@ -52,5 +75,14 @@ public sealed class TextureContentLoader(PackPathResolver packPathResolver)
 
         var texture = ImageTexture.CreateFromImage(image);
         return new TextureLoadResult(contentId, absolutePath, texture);
+    }
+
+    private static AtlasTexture ToAtlas(Texture2D texture, int width, int height, int column, int row)
+    {
+        return new AtlasTexture
+        {
+            Atlas = texture,
+            Region = new Rect2(column * width, row * height, width, height)
+        };
     }
 }

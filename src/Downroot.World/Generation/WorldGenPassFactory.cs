@@ -9,8 +9,15 @@ public static class WorldGenPassFactory
     {
         return definition.PassType switch
         {
-            "fill-terrain" => new FillTerrainPass(definition.TerrainId),
-            "dirt-patch" => new DirtPatchPass(definition.TerrainId),
+            "fill-terrain" => new FillTerrainPass(definition.TargetId),
+            "dirt-patch" => new DirtPatchPass(definition.TargetId),
+            "scatter-spawn" => new ScatterSpawnPass(
+                definition.TargetId,
+                definition.Count,
+                definition.StartColumn,
+                definition.StartRow,
+                definition.Width,
+                definition.Height),
             _ => throw new InvalidOperationException($"Unknown world gen pass type '{definition.PassType}' for '{definition.Id}'.")
         };
     }

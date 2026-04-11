@@ -11,6 +11,7 @@ public interface IContentRegistrar
     void RegisterRecipe(RecipeDef recipeDef);
     void RegisterCreature(CreatureDef creatureDef);
     void RegisterTerrain(TerrainDef terrainDef);
+    void RegisterResourceNode(ResourceNodeDef resourceNodeDef);
     void RegisterWorldGenPass(WorldGenPassDef passDef);
     void SetBootstrapConfig(GameBootstrapConfig config);
 }

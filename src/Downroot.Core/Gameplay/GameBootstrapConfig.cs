@@ -10,5 +10,10 @@ public sealed record GameBootstrapConfig(
     ContentId DebugItemId,
     ContentId DebugPlaceableId,
     ContentId DebugTerrainVariantId,
+    int DayLengthSeconds,
+    int StartingHealth,
+    int StartingHunger,
+    int MaxHealth,
+    int MaxHunger,
     TileSpawn PlayerSpawn,
     TileSpawn DebugPlaceableSpawn);

@@ -18,6 +18,8 @@ public sealed class ContentRegistrar(ContentRegistrySet registries) : IContentRe
 
     public void RegisterTerrain(TerrainDef terrainDef) => registries.Terrains.Register(terrainDef);
 
+    public void RegisterResourceNode(ResourceNodeDef resourceNodeDef) => registries.ResourceNodes.Register(resourceNodeDef);
+
     public void RegisterWorldGenPass(WorldGenPassDef passDef) => registries.WorldGenPasses.Add(passDef);
 
     public void SetBootstrapConfig(GameBootstrapConfig config) => registries.BootstrapConfig = config;
