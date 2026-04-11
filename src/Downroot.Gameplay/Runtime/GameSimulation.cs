@@ -14,6 +14,7 @@ public sealed class GameSimulation(GameRuntime runtime)
 
     public void Tick(float deltaSeconds, InputFrame input)
     {
+        runtime.WorldState.TickStatusMessage(deltaSeconds);
         ValidateActiveStation();
         UpdatePlayerMovement(deltaSeconds, input.Movement);
         UpdateHotbarSelection(input);
@@ -37,14 +38,31 @@ public sealed class GameSimulation(GameRuntime runtime)
 
     public bool Craft(ContentId recipeId)
     {
+        return TryCraft(recipeId, out _);
+    }
+
+    public bool TryCraft(ContentId recipeId, out string failureReason)
+    {
         var recipe = runtime.Content.Recipes.Get(recipeId);
         if (recipe.RequiredStationKey is not null && !IsStationAvailable(recipe.RequiredStationKey))
         {
+            failureReason = $"{recipe.DisplayName} requires a nearby workbench.";
+            PublishCraftResult(recipe, false, failureReason);
             return false;
         }
 
-        if (recipe.Ingredients.Any(ingredient => !runtime.Player.Inventory.Has(ingredient.ItemId, ingredient.Amount)))
+        var missingIngredient = recipe.Ingredients.FirstOrDefault(ingredient => !runtime.Player.Inventory.Has(ingredient.ItemId, ingredient.Amount));
+        if (missingIngredient is not null)
         {
+            failureReason = $"Missing {ShortName(missingIngredient.ItemId)} x{missingIngredient.Amount}.";
+            PublishCraftResult(recipe, false, failureReason);
+            return false;
+        }
+
+        if (!runtime.Player.Inventory.CanAdd(recipe.Result.ItemId, recipe.Result.Amount, runtime.Content))
+        {
+            failureReason = $"No inventory space for {recipe.DisplayName}.";
+            PublishCraftResult(recipe, false, failureReason);
             return false;
         }
 
@@ -53,7 +71,16 @@ public sealed class GameSimulation(GameRuntime runtime)
             runtime.Player.Inventory.TryConsume(ingredient.ItemId, ingredient.Amount);
         }
 
-        return runtime.Player.Inventory.TryAdd(recipe.Result.ItemId, recipe.Result.Amount, runtime.Content);
+        if (!runtime.Player.Inventory.TryAdd(recipe.Result.ItemId, recipe.Result.Amount, runtime.Content))
+        {
+            failureReason = $"Failed to add {recipe.DisplayName} to inventory.";
+            PublishCraftResult(recipe, false, failureReason);
+            return false;
+        }
+
+        failureReason = string.Empty;
+        PublishCraftResult(recipe, true, $"Crafted {recipe.DisplayName}.");
+        return true;
     }
 
     private void UpdatePlayerMovement(float deltaSeconds, Vector2 movement)
@@ -467,4 +494,13 @@ public sealed class GameSimulation(GameRuntime runtime)
                 return blocks && Vector2.Distance(entity.Position, position) < BlockingRadius;
             });
     }
+
+    private void PublishCraftResult(RecipeDef recipe, bool success, string message)
+    {
+        var prefix = success ? "[Craft]" : "[Craft][Blocked]";
+        Console.WriteLine($"{prefix} {recipe.Id.Value}: {message}");
+        runtime.WorldState.SetStatusMessage(message);
+    }
+
+    private static string ShortName(ContentId id) => id.Value.Split(':')[1].Replace('_', ' ');
 }

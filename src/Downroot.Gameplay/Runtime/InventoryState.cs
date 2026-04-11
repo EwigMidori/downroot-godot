@@ -50,6 +50,37 @@ public sealed class InventoryState
         return remaining == 0;
     }
 
+    public bool CanAdd(ContentId itemId, int quantity, ContentRegistrySet registries)
+    {
+        if (!registries.Items.TryGet(itemId, out var itemDef))
+        {
+            return false;
+        }
+
+        var resolvedItemDef = itemDef!;
+        var remaining = quantity;
+        foreach (var slot in _slots.Where(slot => slot.ItemId == itemId && slot.Quantity < resolvedItemDef.MaxStack))
+        {
+            var free = resolvedItemDef.MaxStack - slot.Quantity;
+            remaining -= Math.Min(free, remaining);
+            if (remaining <= 0)
+            {
+                return true;
+            }
+        }
+
+        foreach (var slot in _slots.Where(slot => slot.IsEmpty))
+        {
+            remaining -= Math.Min(resolvedItemDef.MaxStack, remaining);
+            if (remaining <= 0)
+            {
+                return true;
+            }
+        }
+
+        return remaining <= 0;
+    }
+
     public bool Has(ContentId itemId, int quantity)
     {
         return _slots.Where(slot => slot.ItemId == itemId).Sum(slot => slot.Quantity) >= quantity;

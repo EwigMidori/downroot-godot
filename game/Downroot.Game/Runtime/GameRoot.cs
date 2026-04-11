@@ -340,6 +340,10 @@ public partial class GameRoot : Node2D
         _promptLabel!.Text = string.IsNullOrWhiteSpace(_runtime.WorldState.InteractionPrompt)
             ? "Find trees, stones, and berries. Craft a workbench before nightfall."
             : _runtime.WorldState.InteractionPrompt;
+        if (!string.IsNullOrWhiteSpace(_runtime.WorldState.StatusMessage))
+        {
+            _promptLabel.Text = _runtime.WorldState.StatusMessage;
+        }
 
         _destroyBar!.Visible = _runtime.WorldState.DestroyProgress01 > 0f;
         _destroyBar.Value = _runtime.WorldState.DestroyProgress01;
@@ -393,9 +397,15 @@ public partial class GameRoot : Node2D
             };
             button.Pressed += () =>
             {
-                if (_simulation.Craft(recipeId))
+                GD.Print($"[Craft UI] Clicked {recipeId.Value}");
+                if (_simulation!.TryCraft(recipeId, out var failureReason))
                 {
                     _craftingPanelStateKey = null;
+                    RefreshHud();
+                }
+                else
+                {
+                    GD.Print($"[Craft UI] Blocked {recipeId.Value}: {failureReason}");
                     RefreshHud();
                 }
             };
