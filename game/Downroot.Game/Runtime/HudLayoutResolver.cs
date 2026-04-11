@@ -76,21 +76,26 @@ public sealed class HudLayoutResolver
 
     private static void LayoutHotbar(HudView view, Vector2 viewportSize, Vector2 size)
     {
-        var leftBound = Margin;
-        var rightBound = view.CraftWorkspacePanel.Visible
+        var hotbarY = viewportSize.Y - size.Y - Margin;
+        var leftOccupiedRight = view.PrimaryHelpPanel.Position.X + view.PrimaryHelpPanel.Size.X + Gap;
+        var rightOccupiedLeft = view.CraftWorkspacePanel.Visible
             ? view.CraftWorkspacePanel.Position.X - Gap
             : viewportSize.X - Margin;
-        var availableWidth = rightBound - leftBound;
-        var x = leftBound + Math.Max(0f, (availableWidth - size.X) * 0.5f);
+        var laneLeft = Math.Max(Margin, leftOccupiedRight);
+        var laneRight = Math.Max(laneLeft, rightOccupiedLeft);
+        var laneWidth = laneRight - laneLeft;
 
-        if (size.X > availableWidth)
+        if (size.X <= laneWidth)
         {
-            x = leftBound;
-            size.X = Math.Max(200f, availableWidth);
+            var centeredX = laneLeft + (laneWidth - size.X) * 0.5f;
+            view.HotbarPanel.Size = size;
+            view.HotbarPanel.Position = new Vector2(centeredX, hotbarY);
+            return;
         }
 
-        view.HotbarPanel.Size = size;
-        view.HotbarPanel.Position = new Vector2(x, viewportSize.Y - size.Y - Margin);
+        var fallbackWidth = Math.Max(200f, laneWidth);
+        view.HotbarPanel.Size = new Vector2(fallbackWidth, size.Y);
+        view.HotbarPanel.Position = new Vector2(laneLeft, hotbarY);
     }
 
     private static void LayoutHelp(HudView view, Vector2 viewportSize, Vector2 size)
@@ -109,7 +114,7 @@ public sealed class HudLayoutResolver
     private static void LayoutPrompt(HudView view, Vector2 viewportSize, Vector2 size)
     {
         var hotbarTop = view.HotbarPanel.Position.Y;
-        var leftBound = Margin;
+        var leftBound = Math.Max(Margin, view.PrimaryHelpPanel.Position.X + view.PrimaryHelpPanel.Size.X + Gap);
         var rightBound = view.CraftWorkspacePanel.Visible
             ? view.CraftWorkspacePanel.Position.X - Gap
             : viewportSize.X - Margin;
