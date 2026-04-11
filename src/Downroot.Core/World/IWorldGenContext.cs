@@ -6,6 +6,6 @@ public interface IWorldGenContext
 {
     int Width { get; }
     int Height { get; }
-    ContentId GetTerrainId(string contentId);
+    bool HasTerrain(ContentId contentId);
     void SetTerrain(TileCoord coord, ContentId terrainId);
 }

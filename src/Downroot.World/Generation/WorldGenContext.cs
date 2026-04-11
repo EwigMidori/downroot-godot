@@ -10,7 +10,7 @@ public sealed class WorldGenContext(WorldModel world, ContentRegistrySet registr
     public int Width => world.Surface.Width;
     public int Height => world.Surface.Height;
 
-    public ContentId GetTerrainId(string contentId) => registries.Terrains.Get(new ContentId(contentId)).Id;
+    public bool HasTerrain(ContentId contentId) => registries.Terrains.TryGet(contentId, out _);
 
     public void SetTerrain(TileCoord coord, ContentId terrainId) => world.Surface.SetTerrain(coord.X, coord.Y, terrainId);
 }

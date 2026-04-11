@@ -1,3 +1,5 @@
+using Downroot.Core.Ids;
+
 namespace Downroot.Core.World;
 
-public sealed record WorldGenPassDef(string Key, string PassType, string TerrainId);
+public sealed record WorldGenPassDef(ContentId Id, string PassType, ContentId TerrainId);

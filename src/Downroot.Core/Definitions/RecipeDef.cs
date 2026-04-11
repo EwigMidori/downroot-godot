@@ -1,8 +1,10 @@
+using Downroot.Core.Ids;
+
 namespace Downroot.Core.Definitions;
 
 public sealed record RecipeDef(
-    Downroot.Core.Ids.ContentId Id,
+    ContentId Id,
     string DisplayName,
     string SourcePackId,
-    IReadOnlyList<string> IngredientIds,
-    string ResultItemId) : ContentDef(Id, DisplayName, SourcePackId);
+    IReadOnlyList<ContentId> IngredientIds,
+    ContentId ResultItemId) : ContentDef(Id, DisplayName, SourcePackId);

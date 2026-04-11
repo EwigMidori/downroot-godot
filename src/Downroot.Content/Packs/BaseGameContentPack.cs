@@ -64,18 +64,18 @@ public sealed class BaseGameContentPack : IContentPack
             new ContentId("basegame:debug_chest_recipe"),
             "Wooden Chest",
             PackId,
-            [stoneId.Value],
-            chestId.Value));
+            [stoneId],
+            chestId));
 
         registrar.RegisterWorldGenPass(new WorldGenPassDef(
-            "basegame:fill-grass",
+            new ContentId("basegame:fill-grass"),
             "fill-terrain",
-            grassId.Value));
+            grassId));
 
         registrar.RegisterWorldGenPass(new WorldGenPassDef(
-            "basegame:dirt-patch",
+            new ContentId("basegame:dirt-patch"),
             "dirt-patch",
-            dirtId.Value));
+            dirtId));
 
         registrar.SetBootstrapConfig(new GameBootstrapConfig(
             WorldWidth: 24,

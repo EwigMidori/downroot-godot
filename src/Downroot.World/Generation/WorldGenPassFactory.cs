@@ -11,7 +11,7 @@ public static class WorldGenPassFactory
         {
             "fill-terrain" => new FillTerrainPass(definition.TerrainId),
             "dirt-patch" => new DirtPatchPass(definition.TerrainId),
-            _ => throw new InvalidOperationException($"Unknown world gen pass type '{definition.PassType}' for '{definition.Key}'.")
+            _ => throw new InvalidOperationException($"Unknown world gen pass type '{definition.PassType}' for '{definition.Id}'.")
         };
     }
 }
