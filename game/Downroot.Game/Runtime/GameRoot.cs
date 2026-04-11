@@ -34,29 +34,39 @@ public partial class GameRoot : Node2D
 
     public override void _Ready()
     {
-        ConfigureInputMap();
-
-        _runtime = new GameBootstrapper().Bootstrap();
-        _simulation = new GameSimulation(_runtime);
-        _inputService = new GodotInputService(() =>
+        try
         {
-            var pointer = GetGlobalMousePosition();
-            return new NumericsVector2(pointer.X, pointer.Y);
-        });
-        _textureLoader = new TextureContentLoader(new PackPathResolver());
-        _animationFactory = new PlayerAnimationFactory(new PackPathResolver());
+            ConfigureInputMap();
 
-        _terrainLayer = new Node2D { Name = "TerrainLayer" };
-        _entityLayer = new Node2D { Name = "EntityLayer" };
-        AddChild(_terrainLayer);
-        AddChild(_entityLayer);
+            _runtime = new GameBootstrapper().Bootstrap();
+            _simulation = new GameSimulation(_runtime);
+            _inputService = new GodotInputService(() =>
+            {
+                var pointer = GetGlobalMousePosition();
+                return new NumericsVector2(pointer.X, pointer.Y);
+            });
 
-        BuildStaticTerrain();
-        CreatePlayer();
-        CreateHud();
-        ValidateContentLoads();
-        RedrawEntities();
-        RefreshHud();
+            var packPathResolver = new PackPathResolver();
+            _textureLoader = new TextureContentLoader(packPathResolver);
+            _animationFactory = new PlayerAnimationFactory(packPathResolver);
+
+            _terrainLayer = new Node2D { Name = "TerrainLayer" };
+            _entityLayer = new Node2D { Name = "EntityLayer" };
+            AddChild(_terrainLayer);
+            AddChild(_entityLayer);
+
+            BuildStaticTerrain();
+            CreatePlayer();
+            CreateHud();
+            ValidateContentLoads();
+            RedrawEntities();
+            RefreshHud();
+        }
+        catch (Exception exception)
+        {
+            GD.PushError(exception.ToString());
+            ShowStartupError(exception);
+        }
     }
 
     public override void _PhysicsProcess(double delta)
@@ -128,6 +138,14 @@ public partial class GameRoot : Node2D
         };
         _playerSprite.Play("idle_down");
         _playerBody.AddChild(_playerSprite);
+
+        var camera = new Camera2D
+        {
+            Enabled = true,
+            PositionSmoothingEnabled = true,
+            PositionSmoothingSpeed = 6f
+        };
+        _playerBody.AddChild(camera);
         AddChild(_playerBody);
     }
 
@@ -191,6 +209,7 @@ public partial class GameRoot : Node2D
         report.AddSuccess(_textureLoader.LoadTerrain(_runtime.Content.Terrains.Get(new ContentId("basegame:dirt"))).ContentId, "terrain");
         report.AddSuccess(_textureLoader.LoadItem(_runtime.Content.Items.Get(new ContentId("basegame:stone"))).ContentId, "item");
         report.AddSuccess(_textureLoader.LoadPlaceable(_runtime.Content.Placeables.Get(new ContentId("basegame:workbench"))).ContentId, "placeable");
+        GD.Print($"Terrain tiles: {_runtime.World.Surface.Width}x{_runtime.World.Surface.Height}, entities: {_runtime.WorldState.Entities.Count}");
     }
 
     private void RedrawEntities()
@@ -376,4 +395,23 @@ public partial class GameRoot : Node2D
     }
 
     private static Vector2 ToGodot(NumericsVector2 vector) => new(vector.X, vector.Y);
+
+    private void ShowStartupError(Exception exception)
+    {
+        var canvas = new CanvasLayer();
+        AddChild(canvas);
+
+        canvas.AddChild(new ColorRect
+        {
+            Color = new Color(0.08f, 0.04f, 0.04f, 1f),
+            AnchorRight = 1,
+            AnchorBottom = 1
+        });
+
+        canvas.AddChild(new Label
+        {
+            Text = $"Startup failed:\n{exception.Message}",
+            Position = new Vector2(12, 12)
+        });
+    }
 }
