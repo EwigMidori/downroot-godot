@@ -30,14 +30,18 @@ public partial class GameRoot : Node2D
     private Label? _inventoryLabel;
     private VBoxContainer? _craftingPanel;
     private ColorRect? _nightOverlay;
+    private Label? _bootLabel;
     private string _lastFacing = "down";
 
     public override void _Ready()
     {
         try
         {
+            EnsureBootOverlay();
+            UpdateBootStatus("Configuring input");
             ConfigureInputMap();
 
+            UpdateBootStatus("Bootstrapping runtime");
             _runtime = new GameBootstrapper().Bootstrap();
             _simulation = new GameSimulation(_runtime);
             _inputService = new GodotInputService(() =>
@@ -46,21 +50,29 @@ public partial class GameRoot : Node2D
                 return new NumericsVector2(pointer.X, pointer.Y);
             });
 
+            UpdateBootStatus("Resolving content root");
             var packPathResolver = new PackPathResolver();
             _textureLoader = new TextureContentLoader(packPathResolver);
             _animationFactory = new PlayerAnimationFactory(packPathResolver);
+            GD.Print($"Content root resolved. Example grass path: {packPathResolver.ResolveAbsolutePath("packs/basegame/assets/world/terrain/ground/grass.png")}");
 
             _terrainLayer = new Node2D { Name = "TerrainLayer" };
             _entityLayer = new Node2D { Name = "EntityLayer" };
             AddChild(_terrainLayer);
             AddChild(_entityLayer);
 
+            UpdateBootStatus("Building terrain");
             BuildStaticTerrain();
+            UpdateBootStatus("Creating player");
             CreatePlayer();
+            UpdateBootStatus("Creating HUD");
             CreateHud();
+            UpdateBootStatus("Validating content");
             ValidateContentLoads();
+            UpdateBootStatus("Drawing entities");
             RedrawEntities();
             RefreshHud();
+            UpdateBootStatus("Ready");
         }
         catch (Exception exception)
         {
@@ -230,7 +242,7 @@ public partial class GameRoot : Node2D
                     texture = _textureLoader!.LoadResourceNode(_runtime.Content.ResourceNodes.Get(entity.DefinitionId)).Texture;
                     break;
                 case WorldEntityKind.Placeable:
-                    texture = _textureLoader!.LoadPlaceable(_runtime.Content.Placeables.Get(entity.DefinitionId)).Texture;
+                    texture = _textureLoader!.LoadPlaceable(_runtime.Content.Placeables.Get(entity.DefinitionId), entity.OpenState).Texture;
                     break;
                 case WorldEntityKind.Creature:
                     texture = _textureLoader!.LoadCreature(_runtime.Content.Creatures.Get(entity.DefinitionId)).Texture;
@@ -398,6 +410,13 @@ public partial class GameRoot : Node2D
 
     private void ShowStartupError(Exception exception)
     {
+        EnsureBootOverlay();
+        if (_bootLabel is not null)
+        {
+            _bootLabel.Text = $"Startup failed:\n{exception}";
+            return;
+        }
+
         var canvas = new CanvasLayer();
         AddChild(canvas);
 
@@ -413,5 +432,32 @@ public partial class GameRoot : Node2D
             Text = $"Startup failed:\n{exception.Message}",
             Position = new Vector2(12, 12)
         });
+    }
+
+    private void EnsureBootOverlay()
+    {
+        if (_bootLabel is not null)
+        {
+            return;
+        }
+
+        var canvas = new CanvasLayer();
+        AddChild(canvas);
+
+        _bootLabel = new Label
+        {
+            Text = "Booting Downroot...",
+            Position = new Vector2(12, 12)
+        };
+        canvas.AddChild(_bootLabel);
+    }
+
+    private void UpdateBootStatus(string message)
+    {
+        GD.Print($"[Boot] {message}");
+        if (_bootLabel is not null)
+        {
+            _bootLabel.Text = $"Booting Downroot...\n{message}";
+        }
     }
 }

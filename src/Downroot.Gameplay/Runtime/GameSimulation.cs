@@ -420,7 +420,8 @@ public sealed class GameSimulation(GameRuntime runtime)
             .Any(entity =>
             {
                 var def = runtime.Content.Placeables.Get(entity.DefinitionId);
-                return def.BlocksMovement && Vector2.Distance(entity.Position, position) < BlockingRadius;
+                var blocks = entity.OpenState ? def.BlocksMovementWhenOpen : def.BlocksMovement;
+                return blocks && Vector2.Distance(entity.Position, position) < BlockingRadius;
             });
     }
 }

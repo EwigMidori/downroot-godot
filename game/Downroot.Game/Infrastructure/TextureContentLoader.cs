@@ -31,12 +31,15 @@ public sealed class TextureContentLoader(PackPathResolver packPathResolver)
         };
     }
 
-    public TextureLoadResult LoadPlaceable(PlaceableDef placeableDef)
+    public TextureLoadResult LoadPlaceable(PlaceableDef placeableDef, bool isOpen = false)
     {
         var texture = LoadTexture(placeableDef.Id.Value, placeableDef.SpritePath);
+        var atlasColumn = isOpen && placeableDef.HasOpenVariant ? placeableDef.OpenAtlasColumn : placeableDef.AtlasColumn;
+        var atlasRow = isOpen && placeableDef.HasOpenVariant ? placeableDef.OpenAtlasRow : placeableDef.AtlasRow;
+
         return texture with
         {
-            Texture = ToAtlas(texture.Texture, placeableDef.SpriteWidth, placeableDef.SpriteHeight, placeableDef.AtlasColumn, placeableDef.AtlasRow)
+            Texture = ToAtlas(texture.Texture, placeableDef.SpriteWidth, placeableDef.SpriteHeight, atlasColumn, atlasRow)
         };
     }
 

@@ -14,4 +14,8 @@ public sealed record PlaceableDef(
     int MaxDurability = 3,
     bool IsCraftingStation = false,
     string? CraftingStationKey = null,
-    bool BlocksMovement = false) : ContentDef(Id, DisplayName, SourcePackId);
+    bool BlocksMovement = false,
+    bool HasOpenVariant = false,
+    int OpenAtlasColumn = 0,
+    int OpenAtlasRow = 0,
+    bool BlocksMovementWhenOpen = false) : ContentDef(Id, DisplayName, SourcePackId);
