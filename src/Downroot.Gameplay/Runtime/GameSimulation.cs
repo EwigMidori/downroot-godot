@@ -235,18 +235,11 @@ public sealed class GameSimulation(GameRuntime runtime)
             return;
         }
 
+        var breakDuration = Math.Max(1, target.Durability);
         target.DamageAccumulator += deltaSeconds;
-        runtime.WorldState.DestroyProgress01 = Math.Clamp(target.DamageAccumulator / Math.Max(1, target.Durability), 0f, 1f);
-        if (target.DamageAccumulator < Math.Max(1, target.Durability))
+        runtime.WorldState.DestroyProgress01 = Math.Clamp(target.DamageAccumulator / breakDuration, 0f, 1f);
+        if (target.DamageAccumulator < breakDuration)
         {
-            return;
-        }
-
-        target.DamageAccumulator = 0f;
-        target.Durability -= 1;
-        if (target.Durability > 0)
-        {
-            runtime.WorldState.DestroyProgress01 = 0f;
             return;
         }
 
