@@ -8,8 +8,9 @@ public sealed class WorldGenerator(ContentRegistrySet registries, IReadOnlyList<
 {
     public WorldModel Generate(int width, int height)
     {
-        var world = new WorldModel(new ChunkData(width, height));
-        var context = new WorldGenContext(world, registries);
+        var spawns = new List<WorldSpawnDef>();
+        var world = new WorldModel(new ChunkData(width, height), spawns);
+        var context = new WorldGenContext(world, registries, spawns);
 
         foreach (var pass in passes)
         {

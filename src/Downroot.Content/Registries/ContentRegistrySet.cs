@@ -15,6 +15,7 @@ public sealed class ContentRegistrySet
         Recipes = new Registry<RecipeDef>();
         Creatures = new Registry<CreatureDef>();
         Terrains = new Registry<TerrainDef>();
+        ResourceNodes = new Registry<ResourceNodeDef>();
         WorldGenPasses = new List<WorldGenPassDef>();
     }
 
@@ -23,6 +24,7 @@ public sealed class ContentRegistrySet
     public IRegistry<RecipeDef> Recipes { get; }
     public IRegistry<CreatureDef> Creatures { get; }
     public IRegistry<TerrainDef> Terrains { get; }
+    public IRegistry<ResourceNodeDef> ResourceNodes { get; }
     public IList<WorldGenPassDef> WorldGenPasses { get; }
     public GameBootstrapConfig? BootstrapConfig { get; set; }
 

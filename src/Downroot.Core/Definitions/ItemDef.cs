@@ -1,7 +1,15 @@
+using Downroot.Core.Ids;
+
 namespace Downroot.Core.Definitions;
 
 public sealed record ItemDef(
-    Downroot.Core.Ids.ContentId Id,
+    ContentId Id,
     string DisplayName,
     string SourcePackId,
-    string IconPath) : ContentDef(Id, DisplayName, SourcePackId);
+    string IconPath,
+    int IconWidth,
+    int IconHeight,
+    int MaxStack,
+    ContentId? PlaceableId = null,
+    int HungerRestore = 0,
+    int HealthRestore = 0) : ContentDef(Id, DisplayName, SourcePackId);
