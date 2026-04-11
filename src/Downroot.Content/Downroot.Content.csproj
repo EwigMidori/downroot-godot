@@ -1,0 +1,11 @@
+<Project Sdk="Microsoft.NET.Sdk">
+  <PropertyGroup>
+    <AssemblyName>Downroot.Content</AssemblyName>
+    <RootNamespace>Downroot.Content</RootNamespace>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <ProjectReference Include="..\\Downroot.Core\\Downroot.Core.csproj" />
+  </ItemGroup>
+</Project>
+

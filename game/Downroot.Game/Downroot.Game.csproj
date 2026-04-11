@@ -1,0 +1,16 @@
+﻿<Project Sdk="Godot.NET.Sdk/4.4.1">
+  <PropertyGroup>
+    <TargetFramework>net8.0</TargetFramework>
+    <EnableDynamicLoading>true</EnableDynamicLoading>
+    <RootNamespace>Downroot.Game</RootNamespace>
+    <AssemblyName>Downroot.Game</AssemblyName>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <ProjectReference Include="..\..\src\Downroot.Core\Downroot.Core.csproj" />
+    <ProjectReference Include="..\..\src\Downroot.Content\Downroot.Content.csproj" />
+    <ProjectReference Include="..\..\src\Downroot.World\Downroot.World.csproj" />
+    <ProjectReference Include="..\..\src\Downroot.Gameplay\Downroot.Gameplay.csproj" />
+    <ProjectReference Include="..\..\src\Downroot.UI\Downroot.UI.csproj" />
+  </ItemGroup>
+</Project>

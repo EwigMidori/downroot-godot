@@ -1,0 +1,17 @@
+# Godot
+.godot/
+.import/
+mono_crash.*.json
+
+# .NET
+bin/
+obj/
+.vs/
+TestResults/
+*.user
+*.suo
+
+# OS / editors
+.DS_Store
+Thumbs.db
+

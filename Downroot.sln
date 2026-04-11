@@ -1,0 +1,64 @@
+﻿
+Microsoft Visual Studio Solution File, Format Version 12.00
+# Visual Studio Version 17
+VisualStudioVersion = 17.0.31903.59
+MinimumVisualStudioVersion = 10.0.40219.1
+Project("{2150E333-8FDC-42A3-9474-1A3956D46DE8}") = "src", "src", "{0B0C0149-4D85-44C3-BCE2-66A432400C61}"
+EndProject
+Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "Downroot.Core", "src\Downroot.Core\Downroot.Core.csproj", "{219C87EA-616E-4B09-B507-D94E8AFB48E7}"
+EndProject
+Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "Downroot.Content", "src\Downroot.Content\Downroot.Content.csproj", "{2A248339-183D-4B57-840F-6B308B3DD3CF}"
+EndProject
+Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "Downroot.World", "src\Downroot.World\Downroot.World.csproj", "{7F704F63-A7D5-4F0B-BAB4-C3D2E0BA085E}"
+EndProject
+Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "Downroot.Gameplay", "src\Downroot.Gameplay\Downroot.Gameplay.csproj", "{ED9B4842-A9D2-4E12-873D-5BCF2C026CF1}"
+EndProject
+Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "Downroot.UI", "src\Downroot.UI\Downroot.UI.csproj", "{8FCBAAFD-82E9-4A6F-B184-5805AD152961}"
+EndProject
+Project("{2150E333-8FDC-42A3-9474-1A3956D46DE8}") = "game", "game", "{A328EA7C-41C4-4537-B9CD-3EAA8C4B8769}"
+EndProject
+Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "Downroot.Game", "game\Downroot.Game\Downroot.Game.csproj", "{9991D5BF-AEEC-4EFF-B359-F1B86BDC3A49}"
+EndProject
+Global
+	GlobalSection(SolutionConfigurationPlatforms) = preSolution
+		Debug|Any CPU = Debug|Any CPU
+		Release|Any CPU = Release|Any CPU
+	EndGlobalSection
+	GlobalSection(SolutionProperties) = preSolution
+		HideSolutionNode = FALSE
+	EndGlobalSection
+	GlobalSection(ProjectConfigurationPlatforms) = postSolution
+		{219C87EA-616E-4B09-B507-D94E8AFB48E7}.Debug|Any CPU.ActiveCfg = Debug|Any CPU
+		{219C87EA-616E-4B09-B507-D94E8AFB48E7}.Debug|Any CPU.Build.0 = Debug|Any CPU
+		{219C87EA-616E-4B09-B507-D94E8AFB48E7}.Release|Any CPU.ActiveCfg = Release|Any CPU
+		{219C87EA-616E-4B09-B507-D94E8AFB48E7}.Release|Any CPU.Build.0 = Release|Any CPU
+		{2A248339-183D-4B57-840F-6B308B3DD3CF}.Debug|Any CPU.ActiveCfg = Debug|Any CPU
+		{2A248339-183D-4B57-840F-6B308B3DD3CF}.Debug|Any CPU.Build.0 = Debug|Any CPU
+		{2A248339-183D-4B57-840F-6B308B3DD3CF}.Release|Any CPU.ActiveCfg = Release|Any CPU
+		{2A248339-183D-4B57-840F-6B308B3DD3CF}.Release|Any CPU.Build.0 = Release|Any CPU
+		{7F704F63-A7D5-4F0B-BAB4-C3D2E0BA085E}.Debug|Any CPU.ActiveCfg = Debug|Any CPU
+		{7F704F63-A7D5-4F0B-BAB4-C3D2E0BA085E}.Debug|Any CPU.Build.0 = Debug|Any CPU
+		{7F704F63-A7D5-4F0B-BAB4-C3D2E0BA085E}.Release|Any CPU.ActiveCfg = Release|Any CPU
+		{7F704F63-A7D5-4F0B-BAB4-C3D2E0BA085E}.Release|Any CPU.Build.0 = Release|Any CPU
+		{ED9B4842-A9D2-4E12-873D-5BCF2C026CF1}.Debug|Any CPU.ActiveCfg = Debug|Any CPU
+		{ED9B4842-A9D2-4E12-873D-5BCF2C026CF1}.Debug|Any CPU.Build.0 = Debug|Any CPU
+		{ED9B4842-A9D2-4E12-873D-5BCF2C026CF1}.Release|Any CPU.ActiveCfg = Release|Any CPU
+		{ED9B4842-A9D2-4E12-873D-5BCF2C026CF1}.Release|Any CPU.Build.0 = Release|Any CPU
+		{8FCBAAFD-82E9-4A6F-B184-5805AD152961}.Debug|Any CPU.ActiveCfg = Debug|Any CPU
+		{8FCBAAFD-82E9-4A6F-B184-5805AD152961}.Debug|Any CPU.Build.0 = Debug|Any CPU
+		{8FCBAAFD-82E9-4A6F-B184-5805AD152961}.Release|Any CPU.ActiveCfg = Release|Any CPU
+		{8FCBAAFD-82E9-4A6F-B184-5805AD152961}.Release|Any CPU.Build.0 = Release|Any CPU
+		{9991D5BF-AEEC-4EFF-B359-F1B86BDC3A49}.Debug|Any CPU.ActiveCfg = Debug|Any CPU
+		{9991D5BF-AEEC-4EFF-B359-F1B86BDC3A49}.Debug|Any CPU.Build.0 = Debug|Any CPU
+		{9991D5BF-AEEC-4EFF-B359-F1B86BDC3A49}.Release|Any CPU.ActiveCfg = Debug|Any CPU
+		{9991D5BF-AEEC-4EFF-B359-F1B86BDC3A49}.Release|Any CPU.Build.0 = Debug|Any CPU
+	EndGlobalSection
+	GlobalSection(NestedProjects) = preSolution
+		{219C87EA-616E-4B09-B507-D94E8AFB48E7} = {0B0C0149-4D85-44C3-BCE2-66A432400C61}
+		{2A248339-183D-4B57-840F-6B308B3DD3CF} = {0B0C0149-4D85-44C3-BCE2-66A432400C61}
+		{7F704F63-A7D5-4F0B-BAB4-C3D2E0BA085E} = {0B0C0149-4D85-44C3-BCE2-66A432400C61}
+		{ED9B4842-A9D2-4E12-873D-5BCF2C026CF1} = {0B0C0149-4D85-44C3-BCE2-66A432400C61}
+		{8FCBAAFD-82E9-4A6F-B184-5805AD152961} = {0B0C0149-4D85-44C3-BCE2-66A432400C61}
+		{9991D5BF-AEEC-4EFF-B359-F1B86BDC3A49} = {A328EA7C-41C4-4537-B9CD-3EAA8C4B8769}
+	EndGlobalSection
+EndGlobal

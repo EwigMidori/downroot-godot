@@ -1,0 +1,13 @@
+<Project Sdk="Microsoft.NET.Sdk">
+  <PropertyGroup>
+    <AssemblyName>Downroot.UI</AssemblyName>
+    <RootNamespace>Downroot.UI</RootNamespace>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <ProjectReference Include="..\\Downroot.Core\\Downroot.Core.csproj" />
+    <ProjectReference Include="..\\Downroot.Content\\Downroot.Content.csproj" />
+    <ProjectReference Include="..\\Downroot.Gameplay\\Downroot.Gameplay.csproj" />
+  </ItemGroup>
+</Project>
+
