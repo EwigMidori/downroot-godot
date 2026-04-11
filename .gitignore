@@ -2,6 +2,8 @@
 .godot/
 .import/
 mono_crash.*.json
+*.uid
+*.csproj.old
 
 # .NET
 bin/
