@@ -103,7 +103,19 @@ public sealed class GameSimulation(GameRuntime runtime)
     private void UpdateInteractionPrompt()
     {
         var target = GetNearestInteractable();
-        runtime.WorldState.InteractionPrompt = target is null ? string.Empty : "[F] Interact";
+        if (target is null)
+        {
+            runtime.WorldState.InteractionPrompt = string.Empty;
+            return;
+        }
+
+        runtime.WorldState.InteractionPrompt = target.Kind switch
+        {
+            WorldEntityKind.ResourceNode => BuildResourcePrompt(target),
+            WorldEntityKind.Placeable => BuildPlaceablePrompt(target),
+            WorldEntityKind.ItemDrop => BuildDropPrompt(target),
+            _ => "[F] Interact"
+        };
     }
 
     private void HandleToggles(InputFrame input)
@@ -319,6 +331,44 @@ public sealed class GameSimulation(GameRuntime runtime)
         {
             entity.OpenState = !entity.OpenState;
         }
+    }
+
+    private string BuildResourcePrompt(WorldEntityState entity)
+    {
+        var def = runtime.Content.ResourceNodes.Get(entity.DefinitionId);
+        if (def.InstantPickup)
+        {
+            return $"[F] Pick up {def.DisplayName}";
+        }
+
+        if (def.DirectConsume)
+        {
+            return $"[F] Eat {def.DisplayName}";
+        }
+
+        return $"[LMB Hold] Break {def.DisplayName}";
+    }
+
+    private string BuildPlaceablePrompt(WorldEntityState entity)
+    {
+        var def = runtime.Content.Placeables.Get(entity.DefinitionId);
+        if (def.IsCraftingStation)
+        {
+            return $"[F] Use {def.DisplayName}";
+        }
+
+        if (def.HasOpenVariant)
+        {
+            return entity.OpenState ? $"[F] Close {def.DisplayName}" : $"[F] Open {def.DisplayName}";
+        }
+
+        return $"[LMB Hold] Break {def.DisplayName}";
+    }
+
+    private string BuildDropPrompt(WorldEntityState entity)
+    {
+        var def = runtime.Content.Items.Get(entity.DefinitionId);
+        return $"[F] Pick up {def.DisplayName}";
     }
 
     private void PickupDrop(WorldEntityState entity)

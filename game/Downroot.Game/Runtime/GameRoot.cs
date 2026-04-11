@@ -22,15 +22,22 @@ public partial class GameRoot : Node2D
     private Node2D? _entityLayer;
     private CharacterBody2D? _playerBody;
     private AnimatedSprite2D? _playerSprite;
+
+    private CanvasLayer? _bootCanvas;
+    private Label? _bootLabel;
+
     private ProgressBar? _healthBar;
     private ProgressBar? _hungerBar;
     private Label? _promptLabel;
     private Label? _timeLabel;
-    private Label? _hotbarLabel;
-    private Label? _inventoryLabel;
+    private Label? _hintLabel;
+    private RichTextLabel? _hotbarLabel;
+    private RichTextLabel? _inventoryLabel;
     private VBoxContainer? _craftingPanel;
     private ColorRect? _nightOverlay;
-    private Label? _bootLabel;
+    private ProgressBar? _destroyBar;
+
+    private readonly Dictionary<EntityId, Sprite2D> _entitySprites = [];
     private string _lastFacing = "down";
 
     public override void _Ready()
@@ -70,9 +77,10 @@ public partial class GameRoot : Node2D
             UpdateBootStatus("Validating content");
             ValidateContentLoads();
             UpdateBootStatus("Drawing entities");
-            RedrawEntities();
+            SynchronizeEntities();
             RefreshHud();
             UpdateBootStatus("Ready");
+            ClearBootOverlay();
         }
         catch (Exception exception)
         {
@@ -104,7 +112,7 @@ public partial class GameRoot : Node2D
             _playerSprite.Play($"idle_{_lastFacing}");
         }
 
-        RedrawEntities();
+        SynchronizeEntities();
         RefreshHud();
     }
 
@@ -126,7 +134,6 @@ public partial class GameRoot : Node2D
                     Texture = terrainId == variantTerrainDef.Id ? variantTexture : defaultTexture,
                     Position = new Vector2(x * TileSize, y * TileSize)
                 };
-
                 _terrainLayer!.AddChild(sprite);
             }
         }
@@ -171,47 +178,104 @@ public partial class GameRoot : Node2D
             Color = new Color(0.03f, 0.05f, 0.15f, 0f),
             MouseFilter = Control.MouseFilterEnum.Ignore,
             AnchorRight = 1,
-            AnchorBottom = 1,
-            OffsetRight = 0,
-            OffsetBottom = 0
+            AnchorBottom = 1
         };
         canvas.AddChild(_nightOverlay);
 
-        var root = new MarginContainer
+        var topLeftPanel = new PanelContainer
         {
-            AnchorRight = 1,
-            AnchorBottom = 1,
-            OffsetLeft = 8,
-            OffsetTop = 8,
-            OffsetRight = -8,
-            OffsetBottom = -8,
-            MouseFilter = Control.MouseFilterEnum.Ignore
+            Position = new Vector2(12, 12),
+            Size = new Vector2(250, 96),
+            Modulate = new Color(1f, 1f, 1f, 0.92f)
         };
-        canvas.AddChild(root);
+        canvas.AddChild(topLeftPanel);
 
-        var stack = new VBoxContainer();
-        root.AddChild(stack);
+        var topLeftContent = new VBoxContainer();
+        topLeftPanel.AddChild(topLeftContent);
 
         _timeLabel = new Label();
-        stack.AddChild(_timeLabel);
+        topLeftContent.AddChild(_timeLabel);
 
-        _healthBar = new ProgressBar { MaxValue = _runtime!.BootstrapConfig.MaxHealth, CustomMinimumSize = new Vector2(220, 18) };
-        stack.AddChild(_healthBar);
+        _healthBar = new ProgressBar { MaxValue = _runtime!.BootstrapConfig.MaxHealth, CustomMinimumSize = new Vector2(220, 16), ShowPercentage = false };
+        topLeftContent.AddChild(_healthBar);
 
-        _hungerBar = new ProgressBar { MaxValue = _runtime.BootstrapConfig.MaxHunger, CustomMinimumSize = new Vector2(220, 18) };
-        stack.AddChild(_hungerBar);
+        _hungerBar = new ProgressBar { MaxValue = _runtime.BootstrapConfig.MaxHunger, CustomMinimumSize = new Vector2(220, 16), ShowPercentage = false };
+        topLeftContent.AddChild(_hungerBar);
 
-        _promptLabel = new Label();
-        stack.AddChild(_promptLabel);
+        _hintLabel = new Label
+        {
+            Text = "WASD Move  F Interact  LMB Break  RMB Place  Q Eat  C Craft  Tab Bag",
+            Position = new Vector2(12, 114)
+        };
+        canvas.AddChild(_hintLabel);
 
-        _hotbarLabel = new Label();
-        stack.AddChild(_hotbarLabel);
+        _promptLabel = new Label
+        {
+            Position = new Vector2(12, 138)
+        };
+        canvas.AddChild(_promptLabel);
 
-        _inventoryLabel = new Label();
-        stack.AddChild(_inventoryLabel);
+        _destroyBar = new ProgressBar
+        {
+            ShowPercentage = false,
+            Visible = false,
+            CustomMinimumSize = new Vector2(180, 12),
+            Position = new Vector2(280, 12),
+            MaxValue = 1
+        };
+        canvas.AddChild(_destroyBar);
+
+        var hotbarPanel = new PanelContainer
+        {
+            AnchorLeft = 0.5f,
+            AnchorTop = 1,
+            AnchorRight = 0.5f,
+            AnchorBottom = 1,
+            OffsetLeft = -210,
+            OffsetTop = -88,
+            OffsetRight = 210,
+            OffsetBottom = -12,
+            Modulate = new Color(1f, 1f, 1f, 0.94f)
+        };
+        canvas.AddChild(hotbarPanel);
+
+        _hotbarLabel = new RichTextLabel
+        {
+            FitContent = true,
+            BbcodeEnabled = true,
+            ScrollActive = false
+        };
+        hotbarPanel.AddChild(_hotbarLabel);
+
+        var rightPanel = new PanelContainer
+        {
+            AnchorLeft = 1,
+            AnchorTop = 0,
+            AnchorRight = 1,
+            AnchorBottom = 0,
+            OffsetLeft = -280,
+            OffsetTop = 12,
+            OffsetRight = -12,
+            OffsetBottom = 320,
+            Modulate = new Color(1f, 1f, 1f, 0.94f)
+        };
+        canvas.AddChild(rightPanel);
+
+        var rightStack = new VBoxContainer();
+        rightPanel.AddChild(rightStack);
+
+        _inventoryLabel = new RichTextLabel
+        {
+            FitContent = false,
+            ScrollActive = true,
+            BbcodeEnabled = true,
+            CustomMinimumSize = new Vector2(248, 150),
+            Visible = false
+        };
+        rightStack.AddChild(_inventoryLabel);
 
         _craftingPanel = new VBoxContainer();
-        stack.AddChild(_craftingPanel);
+        rightStack.AddChild(_craftingPanel);
     }
 
     private void ValidateContentLoads()
@@ -224,45 +288,41 @@ public partial class GameRoot : Node2D
         GD.Print($"Terrain tiles: {_runtime.World.Surface.Width}x{_runtime.World.Surface.Height}, entities: {_runtime.WorldState.Entities.Count}");
     }
 
-    private void RedrawEntities()
+    private void SynchronizeEntities()
     {
-        foreach (var child in _entityLayer!.GetChildren())
+        var aliveIds = _runtime!.WorldState.Entities.Where(entity => !entity.Removed).Select(entity => entity.Id).ToHashSet();
+
+        foreach (var removedId in _entitySprites.Keys.Where(id => !aliveIds.Contains(id)).ToArray())
         {
-            child.QueueFree();
+            _entitySprites[removedId].QueueFree();
+            _entitySprites.Remove(removedId);
         }
 
-        foreach (var entity in _runtime!.WorldState.Entities.Where(entity => !entity.Removed))
+        foreach (var entity in _runtime.WorldState.Entities.Where(entity => !entity.Removed))
         {
-            Texture2D texture;
-            Vector2 position = ToGodot(entity.Position);
-
-            switch (entity.Kind)
+            if (!_entitySprites.TryGetValue(entity.Id, out var sprite))
             {
-                case WorldEntityKind.ResourceNode:
-                    texture = _textureLoader!.LoadResourceNode(_runtime.Content.ResourceNodes.Get(entity.DefinitionId)).Texture;
-                    break;
-                case WorldEntityKind.Placeable:
-                    texture = _textureLoader!.LoadPlaceable(_runtime.Content.Placeables.Get(entity.DefinitionId), entity.OpenState).Texture;
-                    break;
-                case WorldEntityKind.Creature:
-                    texture = _textureLoader!.LoadCreature(_runtime.Content.Creatures.Get(entity.DefinitionId)).Texture;
-                    break;
-                case WorldEntityKind.ItemDrop:
-                    texture = _textureLoader!.LoadItem(_runtime.Content.Items.Get(entity.DefinitionId)).Texture;
-                    break;
-                default:
-                    continue;
+                sprite = new Sprite2D { Centered = false };
+                _entityLayer!.AddChild(sprite);
+                _entitySprites.Add(entity.Id, sprite);
             }
 
-            var sprite = new Sprite2D
-            {
-                Texture = texture,
-                Position = position,
-                Centered = false,
-                FlipH = entity.Kind == WorldEntityKind.Creature && entity.Position.X > _runtime.Player.Position.X
-            };
-            _entityLayer.AddChild(sprite);
+            sprite.Texture = ResolveEntityTexture(entity);
+            sprite.Position = ToGodot(entity.Position);
+            sprite.FlipH = entity.Kind == WorldEntityKind.Creature && entity.Position.X > _runtime.Player.Position.X;
         }
+    }
+
+    private Texture2D ResolveEntityTexture(WorldEntityState entity)
+    {
+        return entity.Kind switch
+        {
+            WorldEntityKind.ResourceNode => _textureLoader!.LoadResourceNode(_runtime!.Content.ResourceNodes.Get(entity.DefinitionId)).Texture,
+            WorldEntityKind.Placeable => _textureLoader!.LoadPlaceable(_runtime!.Content.Placeables.Get(entity.DefinitionId), entity.OpenState).Texture,
+            WorldEntityKind.Creature => _textureLoader!.LoadCreature(_runtime!.Content.Creatures.Get(entity.DefinitionId)).Texture,
+            WorldEntityKind.ItemDrop => _textureLoader!.LoadItem(_runtime!.Content.Items.Get(entity.DefinitionId)).Texture,
+            _ => throw new InvalidOperationException($"Unsupported entity kind '{entity.Kind}'.")
+        };
     }
 
     private void RefreshHud()
@@ -274,11 +334,14 @@ public partial class GameRoot : Node2D
         _hungerBar.TooltipText = $"Hunger {_runtime.Player.Survival.Hunger}/{_runtime.Player.Survival.MaxHunger}";
 
         var isNight = _runtime.WorldState.IsNight(_runtime.BootstrapConfig.DayLengthSeconds);
-        _timeLabel!.Text = isNight ? "Night: worms are active" : "Daytime";
+        _timeLabel!.Text = isNight ? "Night: worms are active" : "Daytime: gather and build";
         _nightOverlay!.Color = new Color(0.03f, 0.05f, 0.15f, isNight ? 0.35f : 0f);
         _promptLabel!.Text = string.IsNullOrWhiteSpace(_runtime.WorldState.InteractionPrompt)
-            ? "[F] Interact  [Q] Consume  [Tab] Inventory  [C] Craft"
-            : $"{_runtime.WorldState.InteractionPrompt}  [Q] Consume  [Tab] Inventory  [C] Craft";
+            ? "Find trees, stones, and berries. Craft a workbench before nightfall."
+            : _runtime.WorldState.InteractionPrompt;
+
+        _destroyBar!.Visible = _runtime.WorldState.DestroyProgress01 > 0f;
+        _destroyBar.Value = _runtime.WorldState.DestroyProgress01;
 
         _hotbarLabel!.Text = BuildHotbarText();
         _inventoryLabel!.Visible = _runtime.WorldState.InventoryVisible;
@@ -301,14 +364,14 @@ public partial class GameRoot : Node2D
 
         _craftingPanel.AddChild(new Label
         {
-            Text = _runtime.WorldState.ActiveStationKey is null ? "Handcraft" : $"Station: {_runtime.WorldState.ActiveStationKey}"
+            Text = _runtime.WorldState.ActiveStationKey is null ? "Handcraft" : $"Workbench Recipes"
         });
 
         foreach (var recipe in _simulation!.GetAvailableRecipes())
         {
             var button = new Button
             {
-                Text = $"{recipe.DisplayName} ({string.Join(", ", recipe.Ingredients.Select(i => $"{i.ItemId.Value.Split(':')[1]} x{i.Amount}"))})"
+                Text = $"{recipe.DisplayName} ({string.Join(", ", recipe.Ingredients.Select(i => $"{ShortName(i.ItemId)} x{i.Amount}"))})"
             };
             button.Pressed += () => _simulation.Craft(recipe.Id);
             _craftingPanel.AddChild(button);
@@ -317,25 +380,26 @@ public partial class GameRoot : Node2D
 
     private string BuildHotbarText()
     {
-        var lines = new List<string> { "Hotbar" };
+        var parts = new List<string>();
         for (var index = 0; index < _runtime!.Player.HotbarSize; index++)
         {
             var slot = _runtime.Player.Inventory.Slots[index];
-            var selected = index == _runtime.Player.SelectedHotbarIndex ? ">" : " ";
-            var text = slot.ItemId is null ? "(empty)" : $"{_runtime.Content.Items.Get(slot.ItemId.Value).DisplayName} x{slot.Quantity}";
-            lines.Add($"{selected}{index + 1}: {text}");
+            var prefix = index == _runtime.Player.SelectedHotbarIndex ? "[color=yellow]>" : "[color=gray]";
+            var suffix = "[/color]";
+            var text = slot.ItemId is null ? "Empty" : $"{ShortName(slot.ItemId.Value)} x{slot.Quantity}";
+            parts.Add($"{prefix}{index + 1} {text}{suffix}");
         }
 
-        return string.Join('\n', lines);
+        return string.Join("   ", parts);
     }
 
     private string BuildInventoryText()
     {
-        var lines = new List<string> { "Backpack" };
+        var lines = new List<string> { "[b]Backpack[/b]" };
         for (var index = 0; index < _runtime!.Player.Inventory.Slots.Count; index++)
         {
             var slot = _runtime.Player.Inventory.Slots[index];
-            var text = slot.ItemId is null ? "(empty)" : $"{_runtime.Content.Items.Get(slot.ItemId.Value).DisplayName} x{slot.Quantity}";
+            var text = slot.ItemId is null ? "Empty" : $"{ShortName(slot.ItemId.Value)} x{slot.Quantity}";
             lines.Add($"{index + 1:00}: {text}");
         }
 
@@ -414,24 +478,7 @@ public partial class GameRoot : Node2D
         if (_bootLabel is not null)
         {
             _bootLabel.Text = $"Startup failed:\n{exception}";
-            return;
         }
-
-        var canvas = new CanvasLayer();
-        AddChild(canvas);
-
-        canvas.AddChild(new ColorRect
-        {
-            Color = new Color(0.08f, 0.04f, 0.04f, 1f),
-            AnchorRight = 1,
-            AnchorBottom = 1
-        });
-
-        canvas.AddChild(new Label
-        {
-            Text = $"Startup failed:\n{exception.Message}",
-            Position = new Vector2(12, 12)
-        });
     }
 
     private void EnsureBootOverlay()
@@ -441,15 +488,29 @@ public partial class GameRoot : Node2D
             return;
         }
 
-        var canvas = new CanvasLayer();
-        AddChild(canvas);
+        _bootCanvas = new CanvasLayer();
+        AddChild(_bootCanvas);
+
+        _bootCanvas.AddChild(new ColorRect
+        {
+            Color = new Color(0.04f, 0.05f, 0.07f, 0.92f),
+            AnchorRight = 1,
+            AnchorBottom = 1
+        });
 
         _bootLabel = new Label
         {
             Text = "Booting Downroot...",
             Position = new Vector2(12, 12)
         };
-        canvas.AddChild(_bootLabel);
+        _bootCanvas.AddChild(_bootLabel);
+    }
+
+    private void ClearBootOverlay()
+    {
+        _bootCanvas?.QueueFree();
+        _bootCanvas = null;
+        _bootLabel = null;
     }
 
     private void UpdateBootStatus(string message)
@@ -460,4 +521,6 @@ public partial class GameRoot : Node2D
             _bootLabel.Text = $"Booting Downroot...\n{message}";
         }
     }
+
+    private static string ShortName(ContentId id) => id.Value.Split(':')[1].Replace('_', ' ');
 }
