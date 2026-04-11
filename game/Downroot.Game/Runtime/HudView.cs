@@ -11,7 +11,7 @@ public sealed partial class HudView : CanvasLayer
     public sealed record SlotParts(Control SlotRoot, Panel SlotBackground, Panel SelectionFrame, TextureRect ItemIcon, Label StackCountLabel);
 
     public sealed record RecipeRowParts(
-        Control RowRoot,
+        PanelContainer RowRoot,
         TextureRect RecipeResultIcon,
         Label RecipeNameLabel,
         HBoxContainer RecipeCostContainer,
@@ -182,10 +182,15 @@ public sealed partial class HudView : CanvasLayer
         {
             Name = "RecipeListScroll",
             CustomMinimumSize = new Vector2(0, 260),
-            HorizontalScrollMode = ScrollContainer.ScrollMode.Disabled
+            HorizontalScrollMode = ScrollContainer.ScrollMode.Disabled,
+            SizeFlagsHorizontal = Control.SizeFlags.ExpandFill
         };
         recipeRegion.AddChild(RecipeListScroll);
-        RecipeListContainer = new VBoxContainer { Name = "RecipeListContainer" };
+        RecipeListContainer = new VBoxContainer
+        {
+            Name = "RecipeListContainer",
+            SizeFlagsHorizontal = Control.SizeFlags.ExpandFill
+        };
         SetSeparation(RecipeListContainer, 8);
         RecipeListScroll.AddChild(RecipeListContainer);
 
@@ -229,32 +234,20 @@ public sealed partial class HudView : CanvasLayer
 
     public RecipeRowParts CreateRecipeRow(CraftRecipeViewData recipe, Action<ContentId> onCraft)
     {
-        var rowRoot = new Control
+        var rowRoot = new PanelContainer
         {
             Name = "CraftRecipeRow",
             CustomMinimumSize = new Vector2(0, 76),
-            MouseFilter = Control.MouseFilterEnum.Ignore
+            MouseFilter = Control.MouseFilterEnum.Ignore,
+            SizeFlagsHorizontal = Control.SizeFlags.ExpandFill
         };
-
-        var background = new Panel
-        {
-            Name = "RecipeRowBackground",
-            AnchorRight = 1,
-            AnchorBottom = 1
-        };
-        background.AddThemeStyleboxOverride("panel", CreatePanelStyle(new Color(0.14f, 0.16f, 0.2f, 0.95f), new Color(0.26f, 0.3f, 0.36f)));
-        rowRoot.AddChild(background);
+        rowRoot.AddThemeStyleboxOverride("panel", CreatePanelStyle(new Color(0.14f, 0.16f, 0.2f, 0.95f), new Color(0.26f, 0.3f, 0.36f)));
 
         var content = new HBoxContainer
         {
             Name = "RecipeRowContent",
-            AnchorRight = 1,
-            AnchorBottom = 1,
-            OffsetLeft = 10,
-            OffsetTop = 8,
-            OffsetRight = -10,
-            OffsetBottom = -8,
-            MouseFilter = Control.MouseFilterEnum.Ignore
+            MouseFilter = Control.MouseFilterEnum.Ignore,
+            SizeFlagsHorizontal = Control.SizeFlags.ExpandFill
         };
         SetSeparation(content, 10);
         rowRoot.AddChild(content);
