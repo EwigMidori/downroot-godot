@@ -238,11 +238,11 @@ public sealed partial class HudView : CanvasLayer
         var rowRoot = new PanelContainer
         {
             Name = "CraftRecipeRow",
-            CustomMinimumSize = new Vector2(0, 92),
+            CustomMinimumSize = new Vector2(0, 104),
             MouseFilter = Control.MouseFilterEnum.Ignore,
             SizeFlagsHorizontal = Control.SizeFlags.ExpandFill
         };
-        rowRoot.AddThemeStyleboxOverride("panel", CreateTransparentPanelStyle(4));
+        rowRoot.AddThemeStyleboxOverride("panel", CreateTransparentPanelStyle(10, 8));
 
         var content = new VBoxContainer
         {
@@ -313,15 +313,19 @@ public sealed partial class HudView : CanvasLayer
         var chip = new Panel
         {
             Name = "RecipeCostChip",
-            CustomMinimumSize = new Vector2(54, 28),
+            CustomMinimumSize = new Vector2(54, 24),
             TooltipText = cost.IsSatisfied
                 ? $"{cost.ItemName} x{cost.Amount}"
                 : $"{cost.ItemName}: missing {cost.MissingAmount}"
         };
         // Keep recipe rows compact on smaller windows. Item names move to tooltip so cost chips stay icon-first.
-        chip.AddThemeStyleboxOverride("panel", CreateTransparentPanelStyle(2));
+        chip.AddThemeStyleboxOverride("panel", CreateTransparentPanelStyle(0, 0));
 
-        var row = new HBoxContainer { MouseFilter = Control.MouseFilterEnum.Ignore };
+        var row = new HBoxContainer
+        {
+            MouseFilter = Control.MouseFilterEnum.Ignore,
+            Alignment = BoxContainer.AlignmentMode.Center
+        };
         SetSeparation(row, 4);
         chip.AddChild(row);
 
@@ -330,6 +334,7 @@ public sealed partial class HudView : CanvasLayer
             Name = "CostItemIcon",
             Texture = icon,
             CustomMinimumSize = new Vector2(16, 16),
+            ExpandMode = TextureRect.ExpandModeEnum.IgnoreSize,
             StretchMode = TextureRect.StretchModeEnum.KeepCentered
         });
 
@@ -337,6 +342,7 @@ public sealed partial class HudView : CanvasLayer
         {
             Name = "CostAmountLabel",
             Text = $"x{cost.Amount}",
+            VerticalAlignment = VerticalAlignment.Center,
             Modulate = cost.IsSatisfied ? new Color(0.74f, 0.92f, 0.74f) : new Color(0.96f, 0.62f, 0.62f)
         });
 
@@ -555,7 +561,7 @@ public sealed partial class HudView : CanvasLayer
         };
     }
 
-    private static StyleBoxFlat CreateTransparentPanelStyle(int padding)
+    private static StyleBoxFlat CreateTransparentPanelStyle(int horizontalPadding, int verticalPadding)
     {
         return new StyleBoxFlat
         {
@@ -565,10 +571,10 @@ public sealed partial class HudView : CanvasLayer
             BorderWidthTop = 0,
             BorderWidthLeft = 0,
             BorderWidthRight = 0,
-            ContentMarginBottom = padding,
-            ContentMarginTop = padding,
-            ContentMarginLeft = padding,
-            ContentMarginRight = padding
+            ContentMarginBottom = verticalPadding,
+            ContentMarginTop = verticalPadding,
+            ContentMarginLeft = horizontalPadding,
+            ContentMarginRight = horizontalPadding
         };
     }
 
