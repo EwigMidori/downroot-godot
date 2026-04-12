@@ -45,7 +45,7 @@ public sealed partial class HudView : CanvasLayer
     public ScrollContainer RecipeListScroll { get; }
     public VBoxContainer RecipeListContainer { get; }
     public Label CraftInventoryTitleLabel { get; }
-    public GridContainer CraftInventoryGrid { get; }
+    public HFlowContainer CraftInventoryGrid { get; }
     public IReadOnlyList<SlotParts> InventorySlots { get; }
 
     public HudView()
@@ -203,11 +203,12 @@ public sealed partial class HudView : CanvasLayer
             Text = "Inventory"
         };
         inventoryRegion.AddChild(CraftInventoryTitleLabel);
-        CraftInventoryGrid = new GridContainer
+        CraftInventoryGrid = new HFlowContainer
         {
             Name = "CraftInventoryGrid",
-            Columns = 4
+            SizeFlagsHorizontal = Control.SizeFlags.ExpandFill
         };
+        SetFlowSeparation(CraftInventoryGrid, 8, 8);
         inventoryRegion.AddChild(CraftInventoryGrid);
         InventorySlots = Enumerable.Range(0, 16).Select(index =>
         {
@@ -241,7 +242,7 @@ public sealed partial class HudView : CanvasLayer
             MouseFilter = Control.MouseFilterEnum.Ignore,
             SizeFlagsHorizontal = Control.SizeFlags.ExpandFill
         };
-        rowRoot.AddThemeStyleboxOverride("panel", CreatePanelStyle(new Color(0.14f, 0.16f, 0.2f, 0.95f), new Color(0.26f, 0.3f, 0.36f)));
+        rowRoot.AddThemeStyleboxOverride("panel", CreateTransparentPanelStyle(4));
 
         var content = new VBoxContainer
         {
@@ -297,7 +298,7 @@ public sealed partial class HudView : CanvasLayer
         var unavailableMask = new ColorRect
         {
             Name = "RecipeUnavailableMask",
-            Color = new Color(0.03f, 0.04f, 0.05f, 0.45f),
+            Color = new Color(1f, 1f, 1f, 0.06f),
             AnchorRight = 1,
             AnchorBottom = 1,
             MouseFilter = Control.MouseFilterEnum.Ignore
@@ -318,9 +319,7 @@ public sealed partial class HudView : CanvasLayer
                 : $"{cost.ItemName}: missing {cost.MissingAmount}"
         };
         // Keep recipe rows compact on smaller windows. Item names move to tooltip so cost chips stay icon-first.
-        chip.AddThemeStyleboxOverride("panel", CreatePanelStyle(
-            new Color(0.18f, 0.2f, 0.24f, 0.96f),
-            new Color(0.25f, 0.28f, 0.34f)));
+        chip.AddThemeStyleboxOverride("panel", CreateTransparentPanelStyle(2));
 
         var row = new HBoxContainer { MouseFilter = Control.MouseFilterEnum.Ignore };
         SetSeparation(row, 4);
@@ -553,6 +552,23 @@ public sealed partial class HudView : CanvasLayer
             CornerRadiusBottomRight = 8,
             CornerRadiusTopLeft = 8,
             CornerRadiusTopRight = 8
+        };
+    }
+
+    private static StyleBoxFlat CreateTransparentPanelStyle(int padding)
+    {
+        return new StyleBoxFlat
+        {
+            BgColor = new Color(0f, 0f, 0f, 0f),
+            BorderColor = new Color(0f, 0f, 0f, 0f),
+            BorderWidthBottom = 0,
+            BorderWidthTop = 0,
+            BorderWidthLeft = 0,
+            BorderWidthRight = 0,
+            ContentMarginBottom = padding,
+            ContentMarginTop = padding,
+            ContentMarginLeft = padding,
+            ContentMarginRight = padding
         };
     }
 
