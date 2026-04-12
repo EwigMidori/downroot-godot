@@ -269,8 +269,7 @@ public sealed partial class HudView : CanvasLayer
 
         var costContainer = new HBoxContainer
         {
-            Name = "RecipeCostContainer",
-            SizeFlagsHorizontal = Control.SizeFlags.ExpandFill
+            Name = "RecipeCostContainer"
         };
         SetSeparation(costContainer, 6);
         content.AddChild(costContainer);
@@ -303,8 +302,10 @@ public sealed partial class HudView : CanvasLayer
         var chip = new Panel
         {
             Name = "RecipeCostChip",
-            CustomMinimumSize = new Vector2(0, 28)
+            CustomMinimumSize = new Vector2(54, 28),
+            TooltipText = $"{cost.ItemName} x{cost.Amount}"
         };
+        // Keep recipe rows compact on smaller windows. Item names move to tooltip so cost chips stay icon-first.
         chip.AddThemeStyleboxOverride("panel", CreatePanelStyle(
             new Color(0.18f, 0.2f, 0.24f, 0.96f),
             cost.IsSatisfied ? new Color(0.32f, 0.52f, 0.34f) : new Color(0.68f, 0.28f, 0.28f)));
@@ -317,14 +318,8 @@ public sealed partial class HudView : CanvasLayer
         {
             Name = "CostItemIcon",
             Texture = icon,
-            CustomMinimumSize = new Vector2(18, 18),
+            CustomMinimumSize = new Vector2(16, 16),
             StretchMode = TextureRect.StretchModeEnum.KeepCentered
-        });
-
-        row.AddChild(new Label
-        {
-            Name = "CostItemNameLabel",
-            Text = cost.ItemName
         });
 
         row.AddChild(new Label
@@ -534,8 +529,8 @@ public sealed partial class HudView : CanvasLayer
             CornerRadiusTopRight = 8,
             ContentMarginBottom = 8,
             ContentMarginTop = 8,
-            ContentMarginLeft = 10,
-            ContentMarginRight = 10
+            ContentMarginLeft = 8,
+            ContentMarginRight = 8
         };
     }
 
