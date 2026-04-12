@@ -6,4 +6,5 @@ public sealed record RecipeCostViewData(
     ContentId ItemId,
     string ItemName,
     int Amount,
-    bool IsSatisfied);
+    bool IsSatisfied,
+    int MissingAmount);

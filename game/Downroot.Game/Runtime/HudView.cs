@@ -14,7 +14,7 @@ public sealed partial class HudView : CanvasLayer
         PanelContainer RowRoot,
         TextureRect RecipeResultIcon,
         Label RecipeNameLabel,
-        HBoxContainer RecipeCostContainer,
+        HFlowContainer RecipeCostContainer,
         Button RecipeCraftButton,
         ColorRect RecipeUnavailableMask);
 
@@ -237,20 +237,29 @@ public sealed partial class HudView : CanvasLayer
         var rowRoot = new PanelContainer
         {
             Name = "CraftRecipeRow",
-            CustomMinimumSize = new Vector2(0, 76),
+            CustomMinimumSize = new Vector2(0, 92),
             MouseFilter = Control.MouseFilterEnum.Ignore,
             SizeFlagsHorizontal = Control.SizeFlags.ExpandFill
         };
         rowRoot.AddThemeStyleboxOverride("panel", CreatePanelStyle(new Color(0.14f, 0.16f, 0.2f, 0.95f), new Color(0.26f, 0.3f, 0.36f)));
 
-        var content = new HBoxContainer
+        var content = new VBoxContainer
         {
             Name = "RecipeRowContent",
             MouseFilter = Control.MouseFilterEnum.Ignore,
             SizeFlagsHorizontal = Control.SizeFlags.ExpandFill
         };
-        SetSeparation(content, 10);
+        SetSeparation(content, 8);
         rowRoot.AddChild(content);
+
+        var topRow = new HBoxContainer
+        {
+            Name = "RecipeTopRow",
+            MouseFilter = Control.MouseFilterEnum.Ignore,
+            SizeFlagsHorizontal = Control.SizeFlags.ExpandFill
+        };
+        SetSeparation(topRow, 10);
+        content.AddChild(topRow);
 
         var resultIcon = new TextureRect
         {
@@ -258,21 +267,14 @@ public sealed partial class HudView : CanvasLayer
             CustomMinimumSize = new Vector2(36, 36),
             StretchMode = TextureRect.StretchModeEnum.KeepCentered
         };
-        content.AddChild(resultIcon);
+        topRow.AddChild(resultIcon);
 
         var nameLabel = new Label
         {
             Name = "RecipeNameLabel",
             SizeFlagsHorizontal = Control.SizeFlags.ExpandFill
         };
-        content.AddChild(nameLabel);
-
-        var costContainer = new HBoxContainer
-        {
-            Name = "RecipeCostContainer"
-        };
-        SetSeparation(costContainer, 6);
-        content.AddChild(costContainer);
+        topRow.AddChild(nameLabel);
 
         var craftButton = new Button
         {
@@ -282,7 +284,15 @@ public sealed partial class HudView : CanvasLayer
             MouseFilter = Control.MouseFilterEnum.Stop
         };
         craftButton.Pressed += () => onCraft(recipe.RecipeId);
-        content.AddChild(craftButton);
+        topRow.AddChild(craftButton);
+
+        var costContainer = new HFlowContainer
+        {
+            Name = "RecipeCostContainer",
+            SizeFlagsHorizontal = Control.SizeFlags.ExpandFill
+        };
+        SetFlowSeparation(costContainer, 6, 6);
+        content.AddChild(costContainer);
 
         var unavailableMask = new ColorRect
         {
@@ -303,12 +313,14 @@ public sealed partial class HudView : CanvasLayer
         {
             Name = "RecipeCostChip",
             CustomMinimumSize = new Vector2(54, 28),
-            TooltipText = $"{cost.ItemName} x{cost.Amount}"
+            TooltipText = cost.IsSatisfied
+                ? $"{cost.ItemName} x{cost.Amount}"
+                : $"{cost.ItemName}: missing {cost.MissingAmount}"
         };
         // Keep recipe rows compact on smaller windows. Item names move to tooltip so cost chips stay icon-first.
         chip.AddThemeStyleboxOverride("panel", CreatePanelStyle(
             new Color(0.18f, 0.2f, 0.24f, 0.96f),
-            cost.IsSatisfied ? new Color(0.32f, 0.52f, 0.34f) : new Color(0.68f, 0.28f, 0.28f)));
+            new Color(0.25f, 0.28f, 0.34f)));
 
         var row = new HBoxContainer { MouseFilter = Control.MouseFilterEnum.Ignore };
         SetSeparation(row, 4);
@@ -327,13 +339,6 @@ public sealed partial class HudView : CanvasLayer
             Name = "CostAmountLabel",
             Text = $"x{cost.Amount}",
             Modulate = cost.IsSatisfied ? new Color(0.74f, 0.92f, 0.74f) : new Color(0.96f, 0.62f, 0.62f)
-        });
-
-        row.AddChild(new ColorRect
-        {
-            Name = "CostSatisfiedState",
-            Color = cost.IsSatisfied ? new Color(0.3f, 0.82f, 0.3f) : new Color(0.86f, 0.28f, 0.28f),
-            CustomMinimumSize = new Vector2(8, 8)
         });
 
         return chip;

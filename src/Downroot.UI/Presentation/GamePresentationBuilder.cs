@@ -58,11 +58,17 @@ public sealed class GamePresentationBuilder
                 recipe.Result.ItemId,
                 recipe.DisplayName,
                 recipe.Ingredients
-                    .Select(ingredient => new RecipeCostViewData(
-                        ingredient.ItemId,
-                        ResolveItemName(runtime.Content, ingredient.ItemId),
-                        ingredient.Amount,
-                        runtime.Player.Inventory.Has(ingredient.ItemId, ingredient.Amount)))
+                    .Select(ingredient =>
+                    {
+                        var ownedAmount = runtime.Player.Inventory.Count(ingredient.ItemId);
+                        var missingAmount = Math.Max(0, ingredient.Amount - ownedAmount);
+                        return new RecipeCostViewData(
+                            ingredient.ItemId,
+                            ResolveItemName(runtime.Content, ingredient.ItemId),
+                            ingredient.Amount,
+                            missingAmount == 0,
+                            missingAmount);
+                    })
                     .ToArray(),
                 recipe.Ingredients.All(ingredient => runtime.Player.Inventory.Has(ingredient.ItemId, ingredient.Amount))
                     && runtime.Player.Inventory.CanAdd(recipe.Result.ItemId, recipe.Result.Amount, runtime.Content)))
