@@ -14,9 +14,15 @@ public sealed class GameSimulation(GameRuntime runtime)
     private const float AttackRange = 28f;
     private const int EmptyHandDamage = 1;
     private bool _previousDestroyHeld;
+    private bool _suppressDestroyUntilRelease;
 
     public void Tick(float deltaSeconds, InputFrame input)
     {
+        if (!input.DestroyHeld)
+        {
+            _suppressDestroyUntilRelease = false;
+        }
+
         runtime.WorldState.TickStatusEvent(deltaSeconds);
         ValidateActiveStation();
         UpdatePlayerMovement(deltaSeconds, input.Movement);
@@ -332,6 +338,7 @@ public sealed class GameSimulation(GameRuntime runtime)
             ? selectedItem.MeleeDamage
             : EmptyHandDamage;
         DamageCreature(target, damage);
+        _suppressDestroyUntilRelease = true;
     }
 
     private void HandlePlacement(InputFrame input)
@@ -369,6 +376,12 @@ public sealed class GameSimulation(GameRuntime runtime)
 
     private void HandleDestroy(float deltaSeconds, InputFrame input)
     {
+        if (_suppressDestroyUntilRelease)
+        {
+            runtime.WorldState.ActiveDestroyProgress = null;
+            return;
+        }
+
         if (GetSelectedItemDef()?.MeleeDamage is > 0 && GetNearestCreature(AttackRange) is not null)
         {
             runtime.WorldState.ActiveDestroyProgress = null;
