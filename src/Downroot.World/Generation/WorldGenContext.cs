@@ -12,6 +12,8 @@ public sealed class WorldGenContext(WorldModel world, ContentRegistrySet registr
 
     public bool HasTerrain(ContentId contentId) => registries.Terrains.TryGet(contentId, out _);
 
+    public ContentId? GetTerrain(TileCoord coord) => world.Surface.GetTerrainId(coord.X, coord.Y);
+
     public void SetTerrain(TileCoord coord, ContentId terrainId) => world.Surface.SetTerrain(coord.X, coord.Y, terrainId);
 
     public void AddSpawn(TileCoord coord, ContentId contentId) => spawns.Add(new WorldSpawnDef(contentId, coord));

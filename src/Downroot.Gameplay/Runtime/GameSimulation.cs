@@ -11,6 +11,8 @@ public sealed class GameSimulation(GameRuntime runtime)
     private const float InteractionRange = 48f;
     private const float StationRange = 56f;
     private const float BlockingRadius = 18f;
+    private const float AttackRange = 28f;
+    private bool _previousDestroyHeld;
 
     public void Tick(float deltaSeconds, InputFrame input)
     {
@@ -19,21 +21,28 @@ public sealed class GameSimulation(GameRuntime runtime)
         UpdatePlayerMovement(deltaSeconds, input.Movement);
         UpdateHotbarSelection(input);
         UpdateWorldTime(deltaSeconds);
+        UpdateFurnaceTask(deltaSeconds);
         UpdateInteractionContext();
         HandleToggles(input);
         HandleInteract(input);
+        HandleAttack(input);
         HandleConsumption(input);
         HandlePlacement(input);
         HandleDestroy(deltaSeconds, input);
         UpdateCreatures(deltaSeconds);
         runtime.WorldState.RemoveDeleted();
+        _previousDestroyHeld = input.DestroyHeld;
     }
 
     public IReadOnlyList<RecipeDef> GetAvailableRecipes()
     {
-        return runtime.Content.Recipes.All
-            .Where(recipe => recipe.RequiredStationKey is null || IsStationAvailable(recipe.RequiredStationKey))
-            .ToArray();
+        return runtime.WorldState.WorkspaceMode switch
+        {
+            CraftWorkspaceMode.Handcraft => runtime.Content.Recipes.All.Where(recipe => recipe.RequiredStationKey is null).ToArray(),
+            CraftWorkspaceMode.Workbench => runtime.Content.Recipes.All.Where(recipe => recipe.RequiredStationKey == "workbench").ToArray(),
+            CraftWorkspaceMode.Furnace => runtime.Content.Recipes.All.Where(recipe => recipe.RequiredStationKey == "furnace").ToArray(),
+            _ => []
+        };
     }
 
     public bool Craft(ContentId recipeId)
@@ -44,6 +53,7 @@ public sealed class GameSimulation(GameRuntime runtime)
     public bool TryCraft(ContentId recipeId, out string failureReason)
     {
         var recipe = runtime.Content.Recipes.Get(recipeId);
+        var outputs = GetRecipeOutputs(recipe);
         if (recipe.RequiredStationKey is not null && !IsStationAvailable(recipe.RequiredStationKey))
         {
             failureReason = $"{recipe.DisplayName} requires a nearby workbench.";
@@ -59,11 +69,34 @@ public sealed class GameSimulation(GameRuntime runtime)
             return false;
         }
 
-        if (!runtime.Player.Inventory.CanAdd(recipe.Result.ItemId, recipe.Result.Amount, runtime.Content))
+        if (!runtime.Player.Inventory.CanAddMany(outputs, runtime.Content))
         {
             failureReason = $"No inventory space for {recipe.DisplayName}.";
             PublishCraftResult(recipe, false, failureReason, new StatusEventState(StatusEventKind.InventoryFull, recipe.Result.ItemId));
             return false;
+        }
+
+        if (recipe.CraftDurationSeconds > 0f)
+        {
+            if (runtime.WorldState.ActiveFurnaceTask is not null)
+            {
+                failureReason = "Furnace is already processing another recipe.";
+                PublishCraftResult(recipe, false, failureReason, new StatusEventState(StatusEventKind.CraftFailed, recipe.Result.ItemId));
+                return false;
+            }
+
+            if (runtime.WorldState.ActiveStationEntityId is not { } furnaceEntityId || runtime.WorldState.WorkspaceMode != CraftWorkspaceMode.Furnace)
+            {
+                failureReason = "Need an active furnace.";
+                PublishCraftResult(recipe, false, failureReason, new StatusEventState(StatusEventKind.StationRequired, recipe.Result.ItemId));
+                return false;
+            }
+
+            runtime.WorldState.ActiveFurnaceTask = new FurnaceTaskState(recipe.Id, furnaceEntityId, recipe.CraftDurationSeconds);
+            failureReason = string.Empty;
+            runtime.WorldState.SetStatusEvent(new StatusEventState(StatusEventKind.SmeltingStarted, recipe.Result.ItemId), 1.5f);
+            Console.WriteLine($"[Smelt] Started {recipe.Id.Value} at furnace {furnaceEntityId.Value}");
+            return true;
         }
 
         foreach (var ingredient in recipe.Ingredients)
@@ -71,11 +104,14 @@ public sealed class GameSimulation(GameRuntime runtime)
             runtime.Player.Inventory.TryConsume(ingredient.ItemId, ingredient.Amount);
         }
 
-        if (!runtime.Player.Inventory.TryAdd(recipe.Result.ItemId, recipe.Result.Amount, runtime.Content))
+        foreach (var output in outputs)
         {
-            failureReason = $"Failed to add {recipe.DisplayName} to inventory.";
-            PublishCraftResult(recipe, false, failureReason, new StatusEventState(StatusEventKind.CraftFailed, recipe.Result.ItemId));
-            return false;
+            if (!runtime.Player.Inventory.TryAdd(output.ItemId, output.Amount, runtime.Content))
+            {
+                failureReason = $"Failed to add {recipe.DisplayName} to inventory.";
+                PublishCraftResult(recipe, false, failureReason, new StatusEventState(StatusEventKind.CraftFailed, recipe.Result.ItemId));
+                return false;
+            }
         }
 
         failureReason = string.Empty;
@@ -122,9 +158,64 @@ public sealed class GameSimulation(GameRuntime runtime)
             runtime.Player.Survival.DrainHunger(1);
             if (runtime.Player.Survival.Hunger == 0)
             {
-                runtime.Player.Survival.Damage(1);
+                DamagePlayer(1);
             }
         }
+    }
+
+    private void UpdateFurnaceTask(float deltaSeconds)
+    {
+        var task = runtime.WorldState.ActiveFurnaceTask;
+        if (task is null)
+        {
+            return;
+        }
+
+        var furnace = runtime.WorldState.Entities.FirstOrDefault(entity => !entity.Removed && entity.Id == task.FurnaceEntityId);
+        if (furnace is null)
+        {
+            runtime.WorldState.ActiveFurnaceTask = null;
+            return;
+        }
+
+        task.ElapsedSeconds += deltaSeconds;
+        if (task.ElapsedSeconds < task.DurationSeconds)
+        {
+            return;
+        }
+
+        var recipe = runtime.Content.Recipes.Get(task.RecipeId);
+        var outputs = GetRecipeOutputs(recipe);
+        var missingIngredient = recipe.Ingredients.FirstOrDefault(ingredient => !runtime.Player.Inventory.Has(ingredient.ItemId, ingredient.Amount));
+        if (missingIngredient is not null)
+        {
+            runtime.WorldState.ActiveFurnaceTask = null;
+            runtime.WorldState.SetStatusEvent(new StatusEventState(StatusEventKind.MissingIngredient, missingIngredient.ItemId, missingIngredient.Amount));
+            Console.WriteLine($"[Smelt][Blocked] {recipe.Id.Value}: missing {missingIngredient.ItemId.Value} x{missingIngredient.Amount}");
+            return;
+        }
+
+        if (!runtime.Player.Inventory.CanAddMany(outputs, runtime.Content))
+        {
+            runtime.WorldState.ActiveFurnaceTask = null;
+            runtime.WorldState.SetStatusEvent(new StatusEventState(StatusEventKind.InventoryFull, recipe.Result.ItemId));
+            Console.WriteLine($"[Smelt][Blocked] {recipe.Id.Value}: inventory full");
+            return;
+        }
+
+        foreach (var ingredient in recipe.Ingredients)
+        {
+            runtime.Player.Inventory.TryConsume(ingredient.ItemId, ingredient.Amount);
+        }
+
+        foreach (var output in outputs)
+        {
+            runtime.Player.Inventory.TryAdd(output.ItemId, output.Amount, runtime.Content);
+        }
+
+        runtime.WorldState.ActiveFurnaceTask = null;
+        runtime.WorldState.SetStatusEvent(new StatusEventState(StatusEventKind.SmeltingCompleted, recipe.Result.ItemId, recipe.Result.Amount));
+        Console.WriteLine($"[Smelt] Completed {recipe.Id.Value}");
     }
 
     private void UpdateInteractionContext()
@@ -151,7 +242,7 @@ public sealed class GameSimulation(GameRuntime runtime)
                 return;
             }
 
-            if (TryGetNearbyCraftingStation(out var station))
+            if (TryGetNearbyWorkbench(out var station))
             {
                 var stationDef = runtime.Content.Placeables.Get(station.DefinitionId);
                 runtime.WorldState.ActiveStationKey = stationDef.CraftingStationKey;
@@ -221,6 +312,29 @@ public sealed class GameSimulation(GameRuntime runtime)
         }
     }
 
+    private void HandleAttack(InputFrame input)
+    {
+        var attackPressed = input.DestroyHeld && !_previousDestroyHeld;
+        if (!attackPressed)
+        {
+            return;
+        }
+
+        var selectedItem = GetSelectedItemDef();
+        if (selectedItem?.MeleeDamage is not > 0)
+        {
+            return;
+        }
+
+        var target = GetNearestCreature(AttackRange);
+        if (target is null)
+        {
+            return;
+        }
+
+        DamageCreature(target, selectedItem.MeleeDamage);
+    }
+
     private void HandlePlacement(InputFrame input)
     {
         if (!input.PlacePressed)
@@ -256,6 +370,12 @@ public sealed class GameSimulation(GameRuntime runtime)
 
     private void HandleDestroy(float deltaSeconds, InputFrame input)
     {
+        if (GetSelectedItemDef()?.MeleeDamage is > 0 && GetNearestCreature(AttackRange) is not null)
+        {
+            runtime.WorldState.ActiveDestroyProgress = null;
+            return;
+        }
+
         var target = GetNearestDestructible();
         if (target is null || !input.DestroyHeld)
         {
@@ -263,7 +383,7 @@ public sealed class GameSimulation(GameRuntime runtime)
             return;
         }
 
-        var breakDuration = Math.Max(1, target.Durability);
+        var breakDuration = GetBreakDuration(target);
         target.DamageAccumulator += deltaSeconds;
         var progress = Math.Clamp(target.DamageAccumulator / breakDuration, 0f, 1f);
         runtime.WorldState.ActiveDestroyProgress = new DestroyProgressState(
@@ -288,7 +408,29 @@ public sealed class GameSimulation(GameRuntime runtime)
         foreach (var creature in runtime.WorldState.Entities.Where(entity => entity.Kind == WorldEntityKind.Creature && !entity.Removed))
         {
             var def = runtime.Content.Creatures.Get(creature.DefinitionId);
-            if (!def.NightOnlyAggro || !isNight)
+            var distance = Vector2.Distance(creature.Position, runtime.Player.Position);
+
+            if (!isNight && def.DayFleeStartRange > 0f)
+            {
+                if (distance <= def.DayFleeStartRange)
+                {
+                    creature.OpenState = true;
+                }
+                else if (distance >= def.DayFleeStopRange)
+                {
+                    creature.OpenState = false;
+                }
+
+                if (creature.OpenState && distance > 0f)
+                {
+                    var fleeDirection = Vector2.Normalize(creature.Position - runtime.Player.Position);
+                    creature.Position = MoveWithCollision(creature.Position, fleeDirection * def.MoveSpeed * deltaSeconds, creature.Id);
+                }
+                continue;
+            }
+
+            var chase = (def.NightOnlyAggro && isNight) || (def.NightAggroRange > 0f && isNight && distance <= def.NightAggroRange);
+            if (!chase)
             {
                 continue;
             }
@@ -300,9 +442,9 @@ public sealed class GameSimulation(GameRuntime runtime)
             }
 
             creature.AiAccumulator += deltaSeconds;
-            if (Vector2.Distance(creature.Position, runtime.Player.Position) < 18f && creature.AiAccumulator >= 1f)
+            if (Vector2.Distance(creature.Position, runtime.Player.Position) < 18f && creature.AiAccumulator >= def.ContactDamageCooldownSeconds)
             {
-                runtime.Player.Survival.Damage(def.ContactDamage);
+                DamagePlayer(def.ContactDamage);
                 creature.AiAccumulator = 0f;
             }
         }
@@ -352,7 +494,9 @@ public sealed class GameSimulation(GameRuntime runtime)
         {
             runtime.WorldState.ActiveStationKey = def.CraftingStationKey;
             runtime.WorldState.ActiveStationEntityId = entity.Id;
-            runtime.WorldState.WorkspaceMode = CraftWorkspaceMode.Workbench;
+            runtime.WorldState.WorkspaceMode = def.CraftingStationKey == "furnace"
+                ? CraftWorkspaceMode.Furnace
+                : CraftWorkspaceMode.Workbench;
         }
         else
         {
@@ -421,7 +565,7 @@ public sealed class GameSimulation(GameRuntime runtime)
         {
             runtime.WorldState.ActiveStationEntityId = null;
             runtime.WorldState.ActiveStationKey = null;
-            if (runtime.WorldState.WorkspaceMode == CraftWorkspaceMode.Workbench)
+            if (runtime.WorldState.WorkspaceMode is CraftWorkspaceMode.Workbench or CraftWorkspaceMode.Furnace)
             {
                 runtime.WorldState.WorkspaceMode = CraftWorkspaceMode.Hidden;
             }
@@ -520,7 +664,7 @@ public sealed class GameSimulation(GameRuntime runtime)
         return def.InstantPickup || def.DirectConsume;
     }
 
-    private bool TryGetNearbyCraftingStation(out WorldEntityState station)
+    private bool TryGetNearbyWorkbench(out WorldEntityState station)
     {
         station = runtime.WorldState.Entities
             .Where(entity => !entity.Removed && entity.Kind == WorldEntityKind.Placeable)
@@ -532,10 +676,75 @@ public sealed class GameSimulation(GameRuntime runtime)
                     return false;
                 }
 
-                return runtime.Content.Placeables.Get(entity.DefinitionId).IsCraftingStation;
+                return runtime.Content.Placeables.Get(entity.DefinitionId).CraftingStationKey == "workbench";
             })!;
 
         return station is not null;
+    }
+
+    private IReadOnlyList<ItemAmount> GetRecipeOutputs(RecipeDef recipe)
+    {
+        return recipe.ExtraResults is null
+            ? [recipe.Result]
+            : (new[] { recipe.Result }).Concat(recipe.ExtraResults).ToArray();
+    }
+
+    private ItemDef? GetSelectedItemDef()
+    {
+        var slot = runtime.Player.Inventory.Slots[runtime.Player.SelectedHotbarIndex];
+        if (slot.ItemId is null || !runtime.Content.Items.TryGet(slot.ItemId.Value, out var item))
+        {
+            return null;
+        }
+
+        return item;
+    }
+
+    private float GetBreakDuration(WorldEntityState target)
+    {
+        var duration = Math.Max(1, target.Durability);
+        if (target.Kind != WorldEntityKind.ResourceNode)
+        {
+            return duration;
+        }
+
+        var resourceDef = runtime.Content.ResourceNodes.Get(target.DefinitionId);
+        if (!resourceDef.IsTree)
+        {
+            return duration;
+        }
+
+        var multiplier = GetSelectedItemDef()?.TreeBreakSpeedMultiplier ?? 1f;
+        return Math.Max(0.2f, duration / Math.Max(1f, multiplier));
+    }
+
+    private WorldEntityState? GetNearestCreature(float range)
+    {
+        return runtime.WorldState.Entities
+            .Where(entity => !entity.Removed && entity.Kind == WorldEntityKind.Creature)
+            .OrderBy(entity => Vector2.Distance(entity.Position, runtime.Player.Position))
+            .FirstOrDefault(entity => Vector2.Distance(entity.Position, runtime.Player.Position) <= range);
+    }
+
+    private void DamageCreature(WorldEntityState creature, int amount)
+    {
+        creature.Durability = Math.Max(0, creature.Durability - amount);
+        creature.AiAccumulator = 0f;
+        if (creature.Durability <= 0)
+        {
+            creature.Removed = true;
+        }
+    }
+
+    private void DamagePlayer(int amount)
+    {
+        if (amount <= 0)
+        {
+            return;
+        }
+
+        runtime.Player.Survival.Damage(amount);
+        runtime.WorldState.PlayerHitFlashSeconds = 0.18f;
     }
 
     private static string ShortName(ContentId id) => id.Value.Split(':')[1].Replace('_', ' ');

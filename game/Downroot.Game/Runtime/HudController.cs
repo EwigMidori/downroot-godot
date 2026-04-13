@@ -38,6 +38,7 @@ public sealed class HudController
 
         _view.TimeOfDayLabel.Text = snapshot.HudStatus.TimeOfDayLabel;
         _view.NightOverlay.Color = new Color(0.03f, 0.05f, 0.15f, snapshot.HudStatus.IsNight ? 0.32f : 0f);
+        _view.HitOverlay.Color = new Color(0.85f, 0.08f, 0.08f, snapshot.HudStatus.PlayerHitFlashAlpha);
         _view.SetBarValue(_view.HealthBarWidget, snapshot.HudStatus.HealthPercent);
         _view.SetBarValue(_view.HungerBarWidget, snapshot.HudStatus.HungerPercent);
 
@@ -57,16 +58,14 @@ public sealed class HudController
             _view.SetSlot(_view.InventorySlots[index], ResolveItemIcon(slotView.ItemId, runtime), slotView.Quantity, false);
         }
 
-        var recipeStateKey = string.Join('|', new[]
-        {
-            snapshot.CraftingPanel.CraftModeLabel,
-            string.Join(',', snapshot.CraftingPanel.Recipes.Select(recipe => $"{recipe.RecipeId.Value}:{recipe.CanCraft}"))
-        });
-
-        if (_recipeStateKey != recipeStateKey)
+        if (snapshot.CraftingPanel.IsVisible)
         {
             RebuildRecipeList(snapshot.CraftingPanel, runtime);
-            _recipeStateKey = recipeStateKey;
+            _recipeStateKey = snapshot.CraftingPanel.CraftModeLabel;
+        }
+        else
+        {
+            _recipeStateKey = null;
         }
 
         _layoutResolver.Apply(_view, _host.GetViewport().GetVisibleRect().Size);
@@ -110,8 +109,11 @@ public sealed class HudController
             var row = _view.CreateRecipeRow(recipe, OnCraftRequested);
             row.RecipeResultIcon.Texture = ResolveItemIcon(recipe.ResultItemId, runtime);
             row.RecipeNameLabel.Text = recipe.RecipeName;
+            row.RecipeNameLabel.TooltipText = recipe.RecipeName;
             row.RecipeNameLabel.Modulate = recipe.CanCraft ? Colors.White : new Color(0.72f, 0.72f, 0.72f);
             row.RecipeCraftButton.Disabled = !recipe.CanCraft;
+            row.RecipeCraftButton.Text = recipe.ActionLabel;
+            _view.SetBarValue(row.RecipeProgressWidget, recipe.Progress01);
             row.RecipeUnavailableMask.Visible = !recipe.CanCraft;
 
             foreach (var cost in recipe.Costs)

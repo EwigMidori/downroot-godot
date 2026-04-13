@@ -25,7 +25,8 @@ public sealed class GamePresentationBuilder
             isNight ? "Night" : "Daytime",
             isNight,
             ToPercent(runtime.Player.Survival.Health, runtime.Player.Survival.MaxHealth),
-            ToPercent(runtime.Player.Survival.Hunger, runtime.Player.Survival.MaxHunger));
+            ToPercent(runtime.Player.Survival.Hunger, runtime.Player.Survival.MaxHunger),
+            Math.Clamp(runtime.WorldState.PlayerHitFlashSeconds / 0.18f, 0f, 1f) * 0.45f);
     }
 
     private static IReadOnlyList<HotbarSlotViewData> BuildHotbar(GameRuntime runtime)
@@ -41,8 +42,18 @@ public sealed class GamePresentationBuilder
         var mode = runtime.WorldState.WorkspaceMode;
         return new CraftingPanelViewData(
             mode != CraftWorkspaceMode.Hidden,
-            mode == CraftWorkspaceMode.Workbench ? "Workbench" : "Handcraft",
-            mode == CraftWorkspaceMode.Workbench ? CraftModeIconKind.Workbench : CraftModeIconKind.Handcraft,
+            mode switch
+            {
+                CraftWorkspaceMode.Furnace => "Furnace",
+                CraftWorkspaceMode.Workbench => "Workbench",
+                _ => "Handcraft"
+            },
+            mode switch
+            {
+                CraftWorkspaceMode.Furnace => CraftModeIconKind.Furnace,
+                CraftWorkspaceMode.Workbench => CraftModeIconKind.Workbench,
+                _ => CraftModeIconKind.Handcraft
+            },
             mode == CraftWorkspaceMode.Hidden ? [] : BuildRecipeRows(runtime, simulation),
             runtime.Player.Inventory.Slots
                 .Take(16)
@@ -52,12 +63,11 @@ public sealed class GamePresentationBuilder
 
     private static IReadOnlyList<CraftRecipeViewData> BuildRecipeRows(GameRuntime runtime, GameSimulation simulation)
     {
+        var activeTask = runtime.WorldState.ActiveFurnaceTask;
         return simulation.GetAvailableRecipes()
-            .Select(recipe => new CraftRecipeViewData(
-                recipe.Id,
-                recipe.Result.ItemId,
-                recipe.DisplayName,
-                recipe.Ingredients
+            .Select(recipe =>
+            {
+                var costs = recipe.Ingredients
                     .Select(ingredient =>
                     {
                         var ownedAmount = runtime.Player.Inventory.Count(ingredient.ItemId);
@@ -69,9 +79,26 @@ public sealed class GamePresentationBuilder
                             missingAmount == 0,
                             missingAmount);
                     })
-                    .ToArray(),
-                recipe.Ingredients.All(ingredient => runtime.Player.Inventory.Has(ingredient.ItemId, ingredient.Amount))
-                    && runtime.Player.Inventory.CanAdd(recipe.Result.ItemId, recipe.Result.Amount, runtime.Content)))
+                    .ToArray();
+
+                var outputs = recipe.ExtraResults is null
+                    ? new[] { recipe.Result }
+                    : (new[] { recipe.Result }).Concat(recipe.ExtraResults).ToArray();
+                var isRunning = activeTask?.RecipeId == recipe.Id;
+                var canCraft = recipe.Ingredients.All(ingredient => runtime.Player.Inventory.Has(ingredient.ItemId, ingredient.Amount))
+                    && runtime.Player.Inventory.CanAddMany(outputs, runtime.Content)
+                    && (!IsFurnaceRecipe(recipe) || activeTask is null || isRunning);
+
+                return new CraftRecipeViewData(
+                    recipe.Id,
+                    recipe.Result.ItemId,
+                    recipe.DisplayName,
+                    costs,
+                    canCraft,
+                    isRunning ? "Busy" : IsFurnaceRecipe(recipe) ? "Smelt" : "Craft",
+                    isRunning,
+                    isRunning ? activeTask!.Progress01 : 0f);
+            })
             .ToArray();
     }
 
@@ -118,8 +145,10 @@ public sealed class GamePresentationBuilder
         return runtime.WorldState.ActiveStatusEvent switch
         {
             { Kind: StatusEventKind.CraftedItem } => new StatusBannerViewData(true, $"Crafted {ResolveItemName(runtime.Content, statusEvent.PrimaryContentId!.Value)}"),
+            { Kind: StatusEventKind.SmeltingStarted } => new StatusBannerViewData(true, $"Smelting {ResolveItemName(runtime.Content, statusEvent.PrimaryContentId!.Value)}"),
+            { Kind: StatusEventKind.SmeltingCompleted } => new StatusBannerViewData(true, $"Smelted {ResolveItemName(runtime.Content, statusEvent.PrimaryContentId!.Value)}"),
             { Kind: StatusEventKind.MissingIngredient } => new StatusBannerViewData(true, $"Need {ResolveItemName(runtime.Content, statusEvent.PrimaryContentId!.Value)} x{statusEvent.Amount}"),
-            { Kind: StatusEventKind.StationRequired } => new StatusBannerViewData(true, "Need a nearby Workbench"),
+            { Kind: StatusEventKind.StationRequired } => new StatusBannerViewData(true, "Need a nearby station"),
             { Kind: StatusEventKind.InventoryFull } => new StatusBannerViewData(true, "Inventory full"),
             _ => new StatusBannerViewData(true, "Craft failed")
         };
@@ -151,6 +180,8 @@ public sealed class GamePresentationBuilder
     }
 
     private static string ResolveItemName(ContentRegistrySet content, ContentId contentId) => content.Items.Get(contentId).DisplayName;
+
+    private static bool IsFurnaceRecipe(RecipeDef recipe) => recipe.RequiredStationKey == "furnace";
 
     private static float ToPercent(int current, int max) => max <= 0 ? 0f : Math.Clamp((float)current / max, 0f, 1f);
 }

@@ -3,7 +3,8 @@ namespace Downroot.UI.Presentation;
 public enum CraftModeIconKind
 {
     Handcraft,
-    Workbench
+    Workbench,
+    Furnace
 }
 
 public sealed record CraftingPanelViewData(

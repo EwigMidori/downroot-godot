@@ -1,4 +1,5 @@
 using Downroot.Content.Registries;
+using Downroot.Core.Definitions;
 using Downroot.Core.Ids;
 
 namespace Downroot.Gameplay.Runtime;
@@ -81,6 +82,56 @@ public sealed class InventoryState
         return remaining <= 0;
     }
 
+    public bool CanAddMany(IEnumerable<ItemAmount> items, ContentRegistrySet registries)
+    {
+        var slots = _slots.Select(slot => new InventorySlotSnapshot(slot.ItemId, slot.Quantity)).ToList();
+
+        foreach (var item in items)
+        {
+            if (!registries.Items.TryGet(item.ItemId, out var itemDef))
+            {
+                return false;
+            }
+
+            var remaining = item.Amount;
+            var maxStack = itemDef!.MaxStack;
+
+            foreach (var slot in slots.Where(slot => slot.ItemId == item.ItemId && slot.Quantity < maxStack))
+            {
+                var free = maxStack - slot.Quantity;
+                var moved = Math.Min(free, remaining);
+                slot.Quantity += moved;
+                remaining -= moved;
+                if (remaining <= 0)
+                {
+                    break;
+                }
+            }
+
+            if (remaining > 0)
+            {
+                foreach (var slot in slots.Where(slot => slot.ItemId is null))
+                {
+                    var moved = Math.Min(maxStack, remaining);
+                    slot.ItemId = item.ItemId;
+                    slot.Quantity = moved;
+                    remaining -= moved;
+                    if (remaining <= 0)
+                    {
+                        break;
+                    }
+                }
+            }
+
+            if (remaining > 0)
+            {
+                return false;
+            }
+        }
+
+        return true;
+    }
+
     public bool Has(ContentId itemId, int quantity)
     {
         return _slots.Where(slot => slot.ItemId == itemId).Sum(slot => slot.Quantity) >= quantity;
@@ -109,5 +160,11 @@ public sealed class InventoryState
         }
 
         return true;
+    }
+
+    private sealed class InventorySlotSnapshot(ContentId? itemId, int quantity)
+    {
+        public ContentId? ItemId { get; set; } = itemId;
+        public int Quantity { get; set; } = quantity;
     }
 }

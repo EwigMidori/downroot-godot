@@ -10,6 +10,7 @@ public static class WorldGenPassFactory
         return definition.PassType switch
         {
             "fill-terrain" => new FillTerrainPass(definition.TargetId),
+            "grass-region" => new GrassRegionPass(definition.TargetId),
             "dirt-patch" => new DirtPatchPass(definition.TargetId),
             "scatter-spawn" => new ScatterSpawnPass(
                 definition.TargetId,

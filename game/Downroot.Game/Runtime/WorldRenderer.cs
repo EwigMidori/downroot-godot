@@ -72,7 +72,20 @@ public sealed partial class WorldRenderer : Node2D
         _ = ResolveTerrainTexture(runtime.Content.Terrains.Get(new ContentId("basegame:grass")));
         _ = ResolveTerrainTexture(runtime.Content.Terrains.Get(new ContentId("basegame:dirt")));
         _ = ResolveItemTexture(runtime.Content.Items.Get(new ContentId("basegame:stone")));
+        _ = ResolveItemTexture(runtime.Content.Items.Get(new ContentId("basegame:voidite")));
+        _ = ResolveItemTexture(runtime.Content.Items.Get(new ContentId("basegame:goldvein")));
+        _ = ResolveItemTexture(runtime.Content.Items.Get(new ContentId("basegame:venomite")));
+        _ = ResolveItemTexture(runtime.Content.Items.Get(new ContentId("basegame:furnace_item")));
+        _ = ResolveItemTexture(runtime.Content.Items.Get(new ContentId("basegame:axe")));
+        _ = ResolveItemTexture(runtime.Content.Items.Get(new ContentId("basegame:iron_knife")));
         _ = ResolvePlaceableTexture(runtime.Content.Placeables.Get(new ContentId("basegame:workbench")), false);
+        _ = ResolvePlaceableTexture(runtime.Content.Placeables.Get(new ContentId("basegame:furnace")), false);
+        _ = ResolvePlaceableTexture(runtime.Content.Placeables.Get(new ContentId("basegame:stone_wall")), false);
+        _ = ResolvePlaceableTexture(runtime.Content.Placeables.Get(new ContentId("basegame:stone_floor")), false);
+        _ = ResolveResourceNodeTexture(runtime.Content.ResourceNodes.Get(new ContentId("basegame:voidite_node")));
+        _ = ResolveResourceNodeTexture(runtime.Content.ResourceNodes.Get(new ContentId("basegame:goldvein_node")));
+        _ = ResolveResourceNodeTexture(runtime.Content.ResourceNodes.Get(new ContentId("basegame:venomite_node")));
+        _ = ResolveCreatureTexture(runtime.Content.Creatures.Get(new ContentId("basegame:cockroach")));
         GD.Print($"Terrain tiles: {runtime.World.Surface.Width}x{runtime.World.Surface.Height}, entities: {runtime.WorldState.Entities.Count}");
     }
 
