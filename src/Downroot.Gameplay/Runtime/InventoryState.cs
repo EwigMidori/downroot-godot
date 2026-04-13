@@ -86,6 +86,11 @@ public sealed class InventoryState
         return _slots.Where(slot => slot.ItemId == itemId).Sum(slot => slot.Quantity) >= quantity;
     }
 
+    public int Count(ContentId itemId)
+    {
+        return _slots.Where(slot => slot.ItemId == itemId).Sum(slot => slot.Quantity);
+    }
+
     public bool TryConsume(ContentId itemId, int quantity)
     {
         if (!Has(itemId, quantity))

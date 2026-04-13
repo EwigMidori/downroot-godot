@@ -1,0 +1,156 @@
+using Downroot.Content.Registries;
+using Downroot.Core.Definitions;
+using Downroot.Core.Ids;
+using Downroot.Gameplay.Runtime;
+
+namespace Downroot.UI.Presentation;
+
+public sealed class GamePresentationBuilder
+{
+    public GamePresentationSnapshot Build(GameRuntime runtime, GameSimulation simulation)
+    {
+        return new GamePresentationSnapshot(
+            BuildHudStatus(runtime),
+            BuildHotbar(runtime),
+            BuildCraftingPanel(runtime, simulation),
+            BuildInteractionPrompt(runtime),
+            BuildStatusBanner(runtime),
+            BuildDestroyProgress(runtime));
+    }
+
+    private static HudStatusViewData BuildHudStatus(GameRuntime runtime)
+    {
+        var isNight = runtime.WorldState.IsNight(runtime.BootstrapConfig.DayLengthSeconds);
+        return new HudStatusViewData(
+            isNight ? "Night" : "Daytime",
+            isNight,
+            ToPercent(runtime.Player.Survival.Health, runtime.Player.Survival.MaxHealth),
+            ToPercent(runtime.Player.Survival.Hunger, runtime.Player.Survival.MaxHunger));
+    }
+
+    private static IReadOnlyList<HotbarSlotViewData> BuildHotbar(GameRuntime runtime)
+    {
+        return runtime.Player.Inventory.Slots
+            .Take(runtime.Player.HotbarSize)
+            .Select((slot, index) => new HotbarSlotViewData(slot.ItemId, slot.Quantity, index == runtime.Player.SelectedHotbarIndex))
+            .ToArray();
+    }
+
+    private static CraftingPanelViewData BuildCraftingPanel(GameRuntime runtime, GameSimulation simulation)
+    {
+        var mode = runtime.WorldState.WorkspaceMode;
+        return new CraftingPanelViewData(
+            mode != CraftWorkspaceMode.Hidden,
+            mode == CraftWorkspaceMode.Workbench ? "Workbench" : "Handcraft",
+            mode == CraftWorkspaceMode.Workbench ? CraftModeIconKind.Workbench : CraftModeIconKind.Handcraft,
+            mode == CraftWorkspaceMode.Hidden ? [] : BuildRecipeRows(runtime, simulation),
+            runtime.Player.Inventory.Slots
+                .Take(16)
+                .Select(slot => new InventorySlotViewData(slot.ItemId, slot.Quantity))
+                .ToArray());
+    }
+
+    private static IReadOnlyList<CraftRecipeViewData> BuildRecipeRows(GameRuntime runtime, GameSimulation simulation)
+    {
+        return simulation.GetAvailableRecipes()
+            .Select(recipe => new CraftRecipeViewData(
+                recipe.Id,
+                recipe.Result.ItemId,
+                recipe.DisplayName,
+                recipe.Ingredients
+                    .Select(ingredient =>
+                    {
+                        var ownedAmount = runtime.Player.Inventory.Count(ingredient.ItemId);
+                        var missingAmount = Math.Max(0, ingredient.Amount - ownedAmount);
+                        return new RecipeCostViewData(
+                            ingredient.ItemId,
+                            ResolveItemName(runtime.Content, ingredient.ItemId),
+                            ingredient.Amount,
+                            missingAmount == 0,
+                            missingAmount);
+                    })
+                    .ToArray(),
+                recipe.Ingredients.All(ingredient => runtime.Player.Inventory.Has(ingredient.ItemId, ingredient.Amount))
+                    && runtime.Player.Inventory.CanAdd(recipe.Result.ItemId, recipe.Result.Amount, runtime.Content)))
+            .ToArray();
+    }
+
+    private static InteractionPromptViewData BuildInteractionPrompt(GameRuntime runtime)
+    {
+        var context = runtime.WorldState.CurrentInteraction;
+        if (context is null)
+        {
+            return new InteractionPromptViewData(false, "F", PromptIconKind.Use, string.Empty, string.Empty);
+        }
+
+        return new InteractionPromptViewData(
+            true,
+            "F",
+            context.Verb switch
+            {
+                InteractionVerb.Open => PromptIconKind.Open,
+                InteractionVerb.Close => PromptIconKind.Close,
+                InteractionVerb.Gather => PromptIconKind.Gather,
+                InteractionVerb.Eat => PromptIconKind.Eat,
+                InteractionVerb.PickUp => PromptIconKind.PickUp,
+                _ => PromptIconKind.Use
+            },
+            context.Verb switch
+            {
+                InteractionVerb.Open => "Open",
+                InteractionVerb.Close => "Close",
+                InteractionVerb.Gather => "Gather",
+                InteractionVerb.Eat => "Eat",
+                InteractionVerb.PickUp => "Pick Up",
+                _ => "Use"
+            },
+            ResolveTargetName(runtime.Content, context.EntityKind, context.ContentId));
+    }
+
+    private static StatusBannerViewData BuildStatusBanner(GameRuntime runtime)
+    {
+        if (runtime.WorldState.ActiveStatusEvent is null)
+        {
+            return new StatusBannerViewData(false, string.Empty);
+        }
+
+        var statusEvent = runtime.WorldState.ActiveStatusEvent;
+        return runtime.WorldState.ActiveStatusEvent switch
+        {
+            { Kind: StatusEventKind.CraftedItem } => new StatusBannerViewData(true, $"Crafted {ResolveItemName(runtime.Content, statusEvent.PrimaryContentId!.Value)}"),
+            { Kind: StatusEventKind.MissingIngredient } => new StatusBannerViewData(true, $"Need {ResolveItemName(runtime.Content, statusEvent.PrimaryContentId!.Value)} x{statusEvent.Amount}"),
+            { Kind: StatusEventKind.StationRequired } => new StatusBannerViewData(true, "Need a nearby Workbench"),
+            { Kind: StatusEventKind.InventoryFull } => new StatusBannerViewData(true, "Inventory full"),
+            _ => new StatusBannerViewData(true, "Craft failed")
+        };
+    }
+
+    private static DestroyProgressViewData BuildDestroyProgress(GameRuntime runtime)
+    {
+        return runtime.WorldState.ActiveDestroyProgress switch
+        {
+            null => new DestroyProgressViewData(false, string.Empty, 0f, default),
+            var progress => new DestroyProgressViewData(
+                true,
+                ResolveTargetName(runtime.Content, progress.EntityKind, progress.ContentId),
+                progress.Progress01,
+                progress.WorldPosition)
+        };
+    }
+
+    private static string ResolveTargetName(ContentRegistrySet content, WorldEntityKind entityKind, ContentId contentId)
+    {
+        return entityKind switch
+        {
+            WorldEntityKind.ResourceNode => content.ResourceNodes.Get(contentId).DisplayName,
+            WorldEntityKind.Placeable => content.Placeables.Get(contentId).DisplayName,
+            WorldEntityKind.ItemDrop => content.Items.Get(contentId).DisplayName,
+            WorldEntityKind.Creature => content.Creatures.Get(contentId).DisplayName,
+            _ => contentId.Value
+        };
+    }
+
+    private static string ResolveItemName(ContentRegistrySet content, ContentId contentId) => content.Items.Get(contentId).DisplayName;
+
+    private static float ToPercent(int current, int max) => max <= 0 ? 0f : Math.Clamp((float)current / max, 0f, 1f);
+}
