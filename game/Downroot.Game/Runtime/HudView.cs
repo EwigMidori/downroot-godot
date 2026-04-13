@@ -79,7 +79,7 @@ public sealed partial class HudView : CanvasLayer
             Name = "HudRoot",
             AnchorRight = 1,
             AnchorBottom = 1,
-            MouseFilter = Control.MouseFilterEnum.Ignore
+            MouseFilter = Control.MouseFilterEnum.Pass
         };
         AddChild(HudRoot);
 
@@ -308,6 +308,7 @@ public sealed partial class HudView : CanvasLayer
         content.AddChild(costContainer);
 
         var progressWidget = CreateBar("RecipeProgressWidget", 240, new Color(0.53f, 0.84f, 0.95f));
+        progressWidget.BarRoot.Visible = false;
         content.AddChild(progressWidget.BarRoot);
 
         var unavailableMask = new ColorRect

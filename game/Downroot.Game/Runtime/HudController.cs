@@ -15,6 +15,7 @@ public sealed class HudController
     private readonly HudLayoutResolver _layoutResolver = new();
     private readonly Dictionary<string, Texture2D> _itemIconCache = [];
     private readonly HudView _view = new();
+    private readonly Dictionary<ContentId, HudView.RecipeRowParts> _recipeRows = [];
     private GameSimulation? _simulation;
     private string? _recipeStateKey;
 
@@ -60,12 +61,24 @@ public sealed class HudController
 
         if (snapshot.CraftingPanel.IsVisible)
         {
-            RebuildRecipeList(snapshot.CraftingPanel, runtime);
-            _recipeStateKey = snapshot.CraftingPanel.CraftModeLabel;
+            var recipeStateKey = string.Join('|', new[]
+            {
+                snapshot.CraftingPanel.CraftModeLabel,
+                string.Join(',', snapshot.CraftingPanel.Recipes.Select(recipe => recipe.RecipeId.Value))
+            });
+
+            if (_recipeStateKey != recipeStateKey)
+            {
+                RebuildRecipeList(snapshot.CraftingPanel, runtime);
+                _recipeStateKey = recipeStateKey;
+            }
+
+            RefreshRecipeRows(snapshot.CraftingPanel, runtime);
         }
         else
         {
             _recipeStateKey = null;
+            _recipeRows.Clear();
         }
 
         _layoutResolver.Apply(_view, _host.GetViewport().GetVisibleRect().Size);
@@ -98,6 +111,7 @@ public sealed class HudController
         {
             child.QueueFree();
         }
+        _recipeRows.Clear();
 
         if (!panelViewData.IsVisible)
         {
@@ -107,21 +121,34 @@ public sealed class HudController
         foreach (var recipe in panelViewData.Recipes)
         {
             var row = _view.CreateRecipeRow(recipe, OnCraftRequested);
-            row.RecipeResultIcon.Texture = ResolveItemIcon(recipe.ResultItemId, runtime);
-            row.RecipeNameLabel.Text = recipe.RecipeName;
-            row.RecipeNameLabel.TooltipText = recipe.RecipeName;
-            row.RecipeNameLabel.Modulate = recipe.CanCraft ? Colors.White : new Color(0.72f, 0.72f, 0.72f);
-            row.RecipeCraftButton.Disabled = !recipe.CanCraft || recipe.IsRunning;
-            row.RecipeCraftButton.Text = recipe.ActionLabel;
-            _view.SetBarValue(row.RecipeProgressWidget, recipe.Progress01);
-            row.RecipeUnavailableMask.Visible = !recipe.CanCraft;
-
             foreach (var cost in recipe.Costs)
             {
                 row.RecipeCostContainer.AddChild(_view.CreateCostChip(cost, ResolveItemIcon(cost.ItemId, runtime)));
             }
 
             _view.RecipeListContainer.AddChild(row.RowRoot);
+            _recipeRows[recipe.RecipeId] = row;
+        }
+    }
+
+    private void RefreshRecipeRows(CraftingPanelViewData panelViewData, GameRuntime runtime)
+    {
+        foreach (var recipe in panelViewData.Recipes)
+        {
+            if (!_recipeRows.TryGetValue(recipe.RecipeId, out var row))
+            {
+                continue;
+            }
+
+            row.RecipeResultIcon.Texture = ResolveItemIcon(recipe.ResultItemId, runtime);
+            row.RecipeNameLabel.Text = recipe.RecipeName;
+            row.RecipeNameLabel.TooltipText = recipe.RecipeName;
+            row.RecipeNameLabel.Modulate = recipe.CanCraft ? Colors.White : new Color(0.72f, 0.72f, 0.72f);
+            row.RecipeCraftButton.Disabled = !recipe.CanCraft || recipe.IsRunning;
+            row.RecipeCraftButton.Text = recipe.ActionLabel;
+            row.RecipeProgressWidget.BarRoot.Visible = recipe.IsRunning || recipe.ActionLabel == "Smelt";
+            _view.SetBarValue(row.RecipeProgressWidget, recipe.Progress01);
+            row.RecipeUnavailableMask.Visible = !recipe.CanCraft;
         }
     }
 

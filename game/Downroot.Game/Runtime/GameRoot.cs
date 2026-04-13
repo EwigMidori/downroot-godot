@@ -35,7 +35,7 @@ public partial class GameRoot : Node2D
             {
                 var pointer = GetGlobalMousePosition();
                 return new NumericsVector2(pointer.X, pointer.Y);
-            });
+            }, () => GetViewport().GuiGetHoveredControl() is not null);
 
             _startupOverlay.UpdateStatus("Resolving content root");
             var packPathResolver = new PackPathResolver();
