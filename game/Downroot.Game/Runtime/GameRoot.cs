@@ -31,26 +31,26 @@ public partial class GameRoot : Node2D
             _runtime = new GameBootstrapper().Bootstrap();
             _simulation = new GameSimulation(_runtime);
 
-            _inputService = new GodotInputService(() =>
-            {
-                var pointer = GetGlobalMousePosition();
-                return new NumericsVector2(pointer.X, pointer.Y);
-            });
-
             _startupOverlay.UpdateStatus("Resolving content root");
             var packPathResolver = new PackPathResolver();
             _textureLoader = new TextureContentLoader(packPathResolver);
             _animationFactory = new PlayerAnimationFactory(packPathResolver);
             GD.Print($"Content root resolved. Example grass path: {packPathResolver.ResolveAbsolutePath("packs/basegame/assets/world/terrain/ground/grass.png")}");
 
+            _startupOverlay.UpdateStatus("Creating HUD");
+            _hudController = new HudController(this, _textureLoader);
+            _hudController.Initialize(_simulation);
+
+            _inputService = new GodotInputService(() =>
+            {
+                var pointer = GetGlobalMousePosition();
+                return new NumericsVector2(pointer.X, pointer.Y);
+            }, () => _hudController.IsPointerOverBlockingUi(GetViewport().GetMousePosition()));
+
             _startupOverlay.UpdateStatus("Creating world renderer");
             _worldRenderer = new WorldRenderer(_textureLoader, _animationFactory);
             AddChild(_worldRenderer);
             _worldRenderer.Initialize(_runtime);
-
-            _startupOverlay.UpdateStatus("Creating HUD");
-            _hudController = new HudController(this, _textureLoader);
-            _hudController.Initialize(_simulation);
 
             _startupOverlay.UpdateStatus("Validating content");
             _worldRenderer.ValidateContentLoads(_runtime);

@@ -18,4 +18,5 @@ public sealed record PlaceableDef(
     bool HasOpenVariant = false,
     int OpenAtlasColumn = 0,
     int OpenAtlasRow = 0,
-    bool BlocksMovementWhenOpen = false) : ContentDef(Id, DisplayName, SourcePackId);
+    bool BlocksMovementWhenOpen = false,
+    bool IsGroundCover = false) : ContentDef(Id, DisplayName, SourcePackId);

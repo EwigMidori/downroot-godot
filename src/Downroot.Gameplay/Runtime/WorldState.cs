@@ -16,6 +16,8 @@ public sealed class WorldState
     public StatusEventState? ActiveStatusEvent { get; private set; }
     public float ActiveStatusEventSeconds { get; private set; }
     public DestroyProgressState? ActiveDestroyProgress { get; set; }
+    public FurnaceTaskState? ActiveFurnaceTask { get; set; }
+    public float PlayerHitFlashSeconds { get; set; }
 
     public bool IsNight(float dayLengthSeconds) => TimeOfDaySeconds >= dayLengthSeconds * 0.5f;
 
@@ -29,6 +31,12 @@ public sealed class WorldState
 
     public void TickStatusEvent(float deltaSeconds)
     {
+        PlayerHitFlashSeconds = Math.Max(0f, PlayerHitFlashSeconds - deltaSeconds);
+        foreach (var entity in _entities)
+        {
+            entity.HitFlashSeconds = Math.Max(0f, entity.HitFlashSeconds - deltaSeconds);
+        }
+
         if (ActiveStatusEventSeconds <= 0f)
         {
             return;

@@ -14,4 +14,8 @@ public sealed record CreatureDef(
     float MoveSpeed = 0f,
     int ContactDamage = 0,
     bool NightOnlyAggro = false,
-    int MaxHealth = 1) : ContentDef(Id, DisplayName, SourcePackId);
+    int MaxHealth = 1,
+    float DayFleeStartRange = 0f,
+    float DayFleeStopRange = 0f,
+    float NightAggroRange = 0f,
+    float ContactDamageCooldownSeconds = 1f) : ContentDef(Id, DisplayName, SourcePackId);

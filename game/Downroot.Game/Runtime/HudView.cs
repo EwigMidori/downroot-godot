@@ -6,6 +6,8 @@ namespace Downroot.Game.Runtime;
 
 public sealed partial class HudView : CanvasLayer
 {
+    private readonly Control[] _pointerBlockingPanels;
+
     public sealed record BarParts(Control BarRoot, Panel BarFrame, ColorRect BarTrack, ColorRect BarFill, float Width);
 
     public sealed record SlotParts(Control SlotRoot, Panel SlotBackground, Panel SelectionFrame, TextureRect ItemIcon, Label StackCountLabel);
@@ -16,10 +18,12 @@ public sealed partial class HudView : CanvasLayer
         Label RecipeNameLabel,
         HFlowContainer RecipeCostContainer,
         Button RecipeCraftButton,
+        BarParts RecipeProgressWidget,
         ColorRect RecipeUnavailableMask);
 
     public Control HudRoot { get; }
     public ColorRect NightOverlay { get; }
+    public ColorRect HitOverlay { get; }
     public PanelContainer PlayerStatusPanel { get; }
     public Label TimeOfDayLabel { get; }
     public BarParts HealthBarWidget { get; }
@@ -62,12 +66,22 @@ public sealed partial class HudView : CanvasLayer
         };
         AddChild(NightOverlay);
 
+        HitOverlay = new ColorRect
+        {
+            Name = "HitOverlay",
+            Color = new Color(0.85f, 0.08f, 0.08f, 0f),
+            MouseFilter = Control.MouseFilterEnum.Ignore,
+            AnchorRight = 1,
+            AnchorBottom = 1
+        };
+        AddChild(HitOverlay);
+
         HudRoot = new Control
         {
             Name = "HudRoot",
             AnchorRight = 1,
             AnchorBottom = 1,
-            MouseFilter = Control.MouseFilterEnum.Ignore
+            MouseFilter = Control.MouseFilterEnum.Pass
         };
         AddChild(HudRoot);
 
@@ -216,6 +230,34 @@ public sealed partial class HudView : CanvasLayer
             CraftInventoryGrid.AddChild(slot.SlotRoot);
             return slot;
         }).ToArray();
+
+        _pointerBlockingPanels =
+        [
+            PlayerStatusPanel,
+            HotbarPanel,
+            PrimaryHelpPanel,
+            StatusBanner,
+            ContextPromptPanel,
+            CraftWorkspacePanel
+        ];
+    }
+
+    public bool IsPointerOverBlockingUi(Vector2 screenPosition)
+    {
+        foreach (var panel in _pointerBlockingPanels)
+        {
+            if (!panel.Visible)
+            {
+                continue;
+            }
+
+            if (panel.GetGlobalRect().HasPoint(screenPosition))
+            {
+                return true;
+            }
+        }
+
+        return false;
     }
 
     public void SetBarValue(BarParts parts, float percent)
@@ -295,6 +337,10 @@ public sealed partial class HudView : CanvasLayer
         SetFlowSeparation(costContainer, 6, 6);
         content.AddChild(costContainer);
 
+        var progressWidget = CreateBar("RecipeProgressWidget", 240, new Color(0.53f, 0.84f, 0.95f));
+        progressWidget.BarRoot.Visible = false;
+        content.AddChild(progressWidget.BarRoot);
+
         var unavailableMask = new ColorRect
         {
             Name = "RecipeUnavailableMask",
@@ -305,7 +351,12 @@ public sealed partial class HudView : CanvasLayer
         };
         rowRoot.AddChild(unavailableMask);
 
-        return new RecipeRowParts(rowRoot, resultIcon, nameLabel, costContainer, craftButton, unavailableMask);
+        craftButton.AddThemeStyleboxOverride("normal", CreatePanelStyle(new Color(0.17f, 0.21f, 0.27f, 0.98f), new Color(0.44f, 0.57f, 0.67f)));
+        craftButton.AddThemeStyleboxOverride("hover", CreatePanelStyle(new Color(0.2f, 0.25f, 0.31f, 0.98f), new Color(0.55f, 0.71f, 0.83f)));
+        craftButton.AddThemeStyleboxOverride("pressed", CreatePanelStyle(new Color(0.14f, 0.18f, 0.23f, 0.98f), new Color(0.38f, 0.51f, 0.62f)));
+        craftButton.AddThemeStyleboxOverride("disabled", CreatePanelStyle(new Color(0.1f, 0.12f, 0.16f, 0.75f), new Color(0.22f, 0.24f, 0.28f)));
+
+        return new RecipeRowParts(rowRoot, resultIcon, nameLabel, costContainer, craftButton, progressWidget, unavailableMask);
     }
 
     public Control CreateCostChip(RecipeCostViewData cost, Texture2D? icon)
@@ -367,6 +418,7 @@ public sealed partial class HudView : CanvasLayer
         return kind switch
         {
             CraftModeIconKind.Workbench => CreateIconTexture(new Color(0.48f, 0.78f, 0.92f), [new Rect2I(2, 8, 12, 3), new Rect2I(4, 4, 8, 3), new Rect2I(3, 11, 2, 3), new Rect2I(11, 11, 2, 3)]),
+            CraftModeIconKind.Furnace => CreateIconTexture(new Color(0.94f, 0.49f, 0.24f), [new Rect2I(3, 10, 10, 3), new Rect2I(4, 5, 8, 4), new Rect2I(6, 2, 4, 3)]),
             _ => CreateIconTexture(new Color(0.96f, 0.72f, 0.28f), [new Rect2I(4, 3, 8, 3), new Rect2I(2, 6, 12, 3), new Rect2I(4, 9, 8, 4)])
         };
     }

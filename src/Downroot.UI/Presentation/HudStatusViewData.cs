@@ -4,4 +4,5 @@ public sealed record HudStatusViewData(
     string TimeOfDayLabel,
     bool IsNight,
     float HealthPercent,
-    float HungerPercent);
+    float HungerPercent,
+    float PlayerHitFlashAlpha);

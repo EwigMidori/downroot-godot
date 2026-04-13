@@ -7,4 +7,7 @@ public sealed record CraftRecipeViewData(
     ContentId ResultItemId,
     string RecipeName,
     IReadOnlyList<RecipeCostViewData> Costs,
-    bool CanCraft);
+    bool CanCraft,
+    string ActionLabel,
+    bool IsRunning,
+    float Progress01);

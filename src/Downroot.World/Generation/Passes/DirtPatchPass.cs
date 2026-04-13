@@ -20,7 +20,10 @@ public sealed class DirtPatchPass(ContentId terrainId) : IWorldGenPass
             {
                 if ((x + y) % 7 == 0 || (x * 3 + y) % 11 == 0)
                 {
-                    context.SetTerrain(new TileCoord(x, y), terrainId);
+                    var coord = new TileCoord(x, y);
+                    context.SetBaseTerrain(coord, terrainId);
+                    context.SetCoverTerrain(coord, null);
+                    context.SetSurfaceRegion(coord, SurfaceRegions.DirtField);
                 }
             }
         }

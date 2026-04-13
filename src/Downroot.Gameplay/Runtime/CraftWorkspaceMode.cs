@@ -4,5 +4,6 @@ public enum CraftWorkspaceMode
 {
     Hidden,
     Handcraft,
-    Workbench
+    Workbench,
+    Furnace
 }

@@ -15,4 +15,5 @@ public sealed record ResourceNodeDef(
     IReadOnlyList<ItemAmount> Drops,
     bool InstantPickup = false,
     bool DirectConsume = false,
-    int HungerRestore = 0) : ContentDef(Id, DisplayName, SourcePackId);
+    int HungerRestore = 0,
+    bool IsTree = false) : ContentDef(Id, DisplayName, SourcePackId);

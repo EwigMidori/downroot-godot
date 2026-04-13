@@ -8,4 +8,6 @@ public sealed record RecipeDef(
     string SourcePackId,
     IReadOnlyList<ItemAmount> Ingredients,
     ItemAmount Result,
-    string? RequiredStationKey = null) : ContentDef(Id, DisplayName, SourcePackId);
+    string? RequiredStationKey = null,
+    float CraftDurationSeconds = 0f,
+    IReadOnlyList<ItemAmount>? ExtraResults = null) : ContentDef(Id, DisplayName, SourcePackId);

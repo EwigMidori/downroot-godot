@@ -25,4 +25,5 @@ public sealed class WorldEntityState
     public bool OpenState { get; set; }
     public float DamageAccumulator { get; set; }
     public float AiAccumulator { get; set; }
+    public float HitFlashSeconds { get; set; }
 }
