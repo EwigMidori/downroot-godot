@@ -32,6 +32,10 @@ public sealed class WorldState
     public void TickStatusEvent(float deltaSeconds)
     {
         PlayerHitFlashSeconds = Math.Max(0f, PlayerHitFlashSeconds - deltaSeconds);
+        foreach (var entity in _entities)
+        {
+            entity.HitFlashSeconds = Math.Max(0f, entity.HitFlashSeconds - deltaSeconds);
+        }
 
         if (ActiveStatusEventSeconds <= 0f)
         {

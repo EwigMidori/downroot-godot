@@ -12,6 +12,7 @@ public sealed class GameSimulation(GameRuntime runtime)
     private const float StationRange = 56f;
     private const float BlockingRadius = 18f;
     private const float AttackRange = 28f;
+    private const int EmptyHandDamage = 1;
     private bool _previousDestroyHeld;
 
     public void Tick(float deltaSeconds, InputFrame input)
@@ -320,19 +321,17 @@ public sealed class GameSimulation(GameRuntime runtime)
             return;
         }
 
-        var selectedItem = GetSelectedItemDef();
-        if (selectedItem?.MeleeDamage is not > 0)
-        {
-            return;
-        }
-
         var target = GetNearestCreature(AttackRange);
         if (target is null)
         {
             return;
         }
 
-        DamageCreature(target, selectedItem.MeleeDamage);
+        var selectedItem = GetSelectedItemDef();
+        var damage = selectedItem?.MeleeDamage is > 0
+            ? selectedItem.MeleeDamage
+            : EmptyHandDamage;
+        DamageCreature(target, damage);
     }
 
     private void HandlePlacement(InputFrame input)
@@ -730,6 +729,7 @@ public sealed class GameSimulation(GameRuntime runtime)
     {
         creature.Durability = Math.Max(0, creature.Durability - amount);
         creature.AiAccumulator = 0f;
+        creature.HitFlashSeconds = 0.16f;
         if (creature.Durability <= 0)
         {
             creature.Removed = true;

@@ -178,6 +178,10 @@ public sealed partial class WorldRenderer : Node2D
             };
             sprite.Position = ToGodot(entity.Position);
             sprite.FlipH = entity.Kind == WorldEntityKind.Creature && entity.Position.X > _runtime.Player.Position.X;
+            sprite.Modulate = entity.HitFlashSeconds > 0f
+                ? new Color(1f, 0.65f, 0.65f, 1f)
+                : Colors.White;
+            sprite.ZIndex = ResolveZIndex(entity);
         }
     }
 
@@ -210,6 +214,19 @@ public sealed partial class WorldRenderer : Node2D
         texture = factory();
         _textureCache[key] = texture;
         return texture;
+    }
+
+    private int ResolveZIndex(WorldEntityState entity)
+    {
+        return entity.Kind switch
+        {
+            WorldEntityKind.Placeable when _runtime!.Content.Placeables.Get(entity.DefinitionId).IsGroundCover => 1,
+            WorldEntityKind.Placeable => 3,
+            WorldEntityKind.ResourceNode => 4,
+            WorldEntityKind.Creature => 5,
+            WorldEntityKind.ItemDrop => 6,
+            _ => 2
+        };
     }
 
     private static string ResolveFacing(NumericsVector2 movement)

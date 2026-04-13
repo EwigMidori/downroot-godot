@@ -65,7 +65,7 @@ public sealed class BaseGameContentPack : IContentPack
 
         registrar.RegisterPlaceable(new PlaceableDef(furnacePlaceableId, "Furnace", PackId, "packs/basegame/assets/production/utility/furnace.png", 32, 32, 0, 0, 5, true, "furnace", true));
         registrar.RegisterPlaceable(new PlaceableDef(stoneWallPlaceableId, "Stone Wall", PackId, "packs/basegame/assets/structures/walls/stone_wall.png", 32, 32, 0, 0, 5, false, null, true));
-        registrar.RegisterPlaceable(new PlaceableDef(stoneFloorPlaceableId, "Stone Floor", PackId, "packs/basegame/assets/world/terrain/floors/stone_floor.png", 32, 32, 0, 0, 2, false, null, false));
+        registrar.RegisterPlaceable(new PlaceableDef(stoneFloorPlaceableId, "Stone Floor", PackId, "packs/basegame/assets/world/terrain/floors/stone_floor.png", 32, 32, 0, 0, 2, false, null, false, false, 0, 0, false, true));
         registrar.RegisterPlaceable(new PlaceableDef(workbenchPlaceableId, "Workbench", PackId, "packs/basegame/assets/production/workstations/workbench.png", 28, 32, 0, 0, 3, true, "workbench", true));
         registrar.RegisterPlaceable(new PlaceableDef(torchPlaceableId, "Torch", PackId, "packs/basegame/assets/items/torch.png", 16, 16, 0, 0, 1));
         registrar.RegisterPlaceable(new PlaceableDef(chestPlaceableId, "Wooden Chest", PackId, "packs/basegame/assets/production/storage/wooden_chest.png", 32, 32, 0, 0, 3, false, null, true, true, 1, 0, true));
@@ -255,7 +255,7 @@ public sealed class BaseGameContentPack : IContentPack
             new ContentId("basegame:craft_furnace"),
             "Furnace",
             PackId,
-            [new ItemAmount(stoneItemId, 4), new ItemAmount(ironIngotItemId, 1)],
+            [new ItemAmount(stoneItemId, 4)],
             new ItemAmount(furnaceItemId, 1),
             "workbench"));
 

@@ -111,7 +111,7 @@ public sealed class HudController
             row.RecipeNameLabel.Text = recipe.RecipeName;
             row.RecipeNameLabel.TooltipText = recipe.RecipeName;
             row.RecipeNameLabel.Modulate = recipe.CanCraft ? Colors.White : new Color(0.72f, 0.72f, 0.72f);
-            row.RecipeCraftButton.Disabled = !recipe.CanCraft;
+            row.RecipeCraftButton.Disabled = !recipe.CanCraft || recipe.IsRunning;
             row.RecipeCraftButton.Text = recipe.ActionLabel;
             _view.SetBarValue(row.RecipeProgressWidget, recipe.Progress01);
             row.RecipeUnavailableMask.Visible = !recipe.CanCraft;
