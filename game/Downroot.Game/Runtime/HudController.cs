@@ -149,6 +149,17 @@ public sealed class HudController
             row.RecipeNameLabel.Text = recipe.RecipeName;
             row.RecipeNameLabel.TooltipText = recipe.RecipeName;
             row.RecipeNameLabel.Modulate = recipe.CanCraft ? Colors.White : new Color(0.72f, 0.72f, 0.72f);
+
+            foreach (var child in row.RecipeCostContainer.GetChildren())
+            {
+                child.QueueFree();
+            }
+
+            foreach (var cost in recipe.Costs)
+            {
+                row.RecipeCostContainer.AddChild(_view.CreateCostChip(cost, ResolveItemIcon(cost.ItemId, runtime)));
+            }
+
             row.RecipeCraftButton.Disabled = !recipe.CanCraft || recipe.IsRunning;
             row.RecipeCraftButton.Text = recipe.ActionLabel;
             row.RecipeProgressWidget.BarRoot.Visible = recipe.IsRunning || recipe.ActionLabel == "Smelt";
