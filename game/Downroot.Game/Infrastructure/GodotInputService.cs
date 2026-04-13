@@ -15,12 +15,12 @@ public sealed class GodotInputService(Func<NumericsVector2> pointerProvider, Fun
         return new InputFrame(
             new NumericsVector2(movement.X, movement.Y),
             new NumericsVector2(pointer.X, pointer.Y),
-            !pointerBlockedByUi && Input.IsActionJustPressed("interact"),
+            Input.IsActionJustPressed("interact"),
             !pointerBlockedByUi && Input.IsMouseButtonPressed(MouseButton.Left),
             !pointerBlockedByUi && Input.IsMouseButtonPressed(MouseButton.Right),
             false,
-            !pointerBlockedByUi && Input.IsActionJustPressed("toggle_craft_workspace"),
-            !pointerBlockedByUi && Input.IsActionJustPressed("consume_selected"),
+            Input.IsActionJustPressed("toggle_craft_workspace"),
+            Input.IsActionJustPressed("consume_selected"),
             GetScrollDelta(),
             GetDirectHotbarSlot());
     }
