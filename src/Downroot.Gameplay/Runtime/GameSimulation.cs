@@ -1,8 +1,9 @@
 using System.Numerics;
-using Downroot.Content.Registries;
 using Downroot.Core.Definitions;
 using Downroot.Core.Ids;
 using Downroot.Core.Input;
+using Downroot.Core.World;
+using Downroot.Gameplay.Bootstrap;
 
 namespace Downroot.Gameplay.Runtime;
 
@@ -13,6 +14,7 @@ public sealed class GameSimulation(GameRuntime runtime)
     private const float BlockingRadius = 18f;
     private const float AttackRange = 28f;
     private const int EmptyHandDamage = 1;
+    private readonly ContentId _portalId = new("basegame:portal");
     private bool _previousDestroyHeld;
     private bool _suppressDestroyUntilRelease;
 
@@ -24,10 +26,19 @@ public sealed class GameSimulation(GameRuntime runtime)
         }
 
         runtime.WorldState.TickStatusEvent(deltaSeconds);
+        UpdateWorldTime(deltaSeconds);
+        if (runtime.WorldState.Travel.IsActive)
+        {
+            TickTravel(deltaSeconds);
+            runtime.WorldState.RemoveDeleted();
+            _previousDestroyHeld = input.DestroyHeld;
+            return;
+        }
+
+        UpdateLoadedChunks();
         ValidateActiveStation();
         UpdatePlayerMovement(deltaSeconds, input.Movement);
         UpdateHotbarSelection(input);
-        UpdateWorldTime(deltaSeconds);
         UpdateFurnaceTask(deltaSeconds);
         UpdateInteractionContext();
         HandleToggles(input);
@@ -37,6 +48,8 @@ public sealed class GameSimulation(GameRuntime runtime)
         HandlePlacement(input);
         HandleDestroy(deltaSeconds, input);
         UpdateCreatures(deltaSeconds);
+        ReassignRuntimeEntities();
+        UpdateInteractionContext();
         runtime.WorldState.RemoveDeleted();
         _previousDestroyHeld = input.DestroyHeld;
     }
@@ -124,6 +137,124 @@ public sealed class GameSimulation(GameRuntime runtime)
         failureReason = string.Empty;
         PublishCraftResult(recipe, true, $"Crafted {recipe.DisplayName}.", new StatusEventState(StatusEventKind.CraftedItem, recipe.Result.ItemId, recipe.Result.Amount));
         return true;
+    }
+
+    private void UpdateLoadedChunks()
+    {
+        var world = runtime.WorldState.GetActiveWorld();
+        var centerChunk = runtime.GetChunkCoord(runtime.Player.Position);
+        var desired = new HashSet<ChunkCoord>();
+
+        for (var y = centerChunk.Y - world.LoadRadius; y <= centerChunk.Y + world.LoadRadius; y++)
+        {
+            for (var x = centerChunk.X - world.LoadRadius; x <= centerChunk.X + world.LoadRadius; x++)
+            {
+                var coord = new ChunkCoord(x, y);
+                if (!world.ContainsChunk(coord))
+                {
+                    continue;
+                }
+
+                desired.Add(coord);
+                if (world.LoadedChunks.ContainsKey(coord))
+                {
+                    continue;
+                }
+
+                var generated = runtime.GetWorldGenerator(world.WorldSpaceKind)
+                    .GenerateChunk(world.WorldSpaceKind, world.WorldSeed, coord, runtime.ChunkWidth, runtime.ChunkHeight);
+                world.LoadChunk(generated, chunk => GameBootstrapper.CreateChunkRuntimeState(runtime, chunk));
+            }
+        }
+
+        foreach (var staleChunk in world.LoadedChunks.Keys.Where(coord => !desired.Contains(coord)).ToArray())
+        {
+            world.UnloadChunk(staleChunk);
+        }
+
+        runtime.WorldState.RefreshEntityProjection();
+    }
+
+    private void TickTravel(float deltaSeconds)
+    {
+        var travel = runtime.WorldState.Travel;
+        travel.PhaseRemainingSeconds = Math.Max(0f, travel.PhaseRemainingSeconds - deltaSeconds);
+        if (travel.PhaseRemainingSeconds > 0f)
+        {
+            return;
+        }
+
+        switch (travel.Phase)
+        {
+            case WorldTravelPhase.FadingOut:
+                travel.Phase = WorldTravelPhase.Switching;
+                travel.PhaseRemainingSeconds = 0.05f;
+                PerformWorldSwitch();
+                break;
+            case WorldTravelPhase.Switching:
+                travel.Phase = WorldTravelPhase.FadingIn;
+                travel.PhaseRemainingSeconds = 0.25f;
+                break;
+            case WorldTravelPhase.FadingIn:
+                travel.Reset();
+                break;
+        }
+    }
+
+    private void PerformWorldSwitch()
+    {
+        runtime.ActiveWorldSpaceKind = runtime.WorldState.Travel.TargetWorldSpaceKind;
+        runtime.WorldState.WorkspaceMode = CraftWorkspaceMode.Hidden;
+        runtime.WorldState.ActiveStationEntityId = null;
+        runtime.WorldState.ActiveStationKey = null;
+        UpdateLoadedChunksForWorld(runtime.WorldState.GetActiveWorld(), runtime.WorldState.Travel.TargetPortalTile);
+        runtime.Player.Position = FindPortalLandingPosition(runtime.WorldState.GetActiveWorld(), runtime.WorldState.Travel.TargetPortalTile);
+        runtime.WorldState.RefreshEntityProjection();
+        runtime.WorldState.SetStatusEvent(
+            runtime.ActiveWorldSpaceKind == WorldSpaceKind.Overworld
+                ? new StatusEventState(StatusEventKind.ReturnedThroughPortal)
+                : new StatusEventState(StatusEventKind.EnteredPortal),
+            1.5f);
+    }
+
+    private void UpdateLoadedChunksForWorld(LoadedWorldState world, WorldTileCoord aroundTile)
+    {
+        var currentWorld = runtime.ActiveWorldSpaceKind;
+        var savedPosition = runtime.Player.Position;
+        runtime.ActiveWorldSpaceKind = world.WorldSpaceKind;
+        runtime.Player.Position = runtime.GetWorldPosition(aroundTile);
+        UpdateLoadedChunks();
+        runtime.Player.Position = savedPosition;
+        runtime.ActiveWorldSpaceKind = currentWorld;
+        runtime.WorldState.RefreshEntityProjection();
+    }
+
+    private Vector2 FindPortalLandingPosition(LoadedWorldState world, WorldTileCoord portalTile)
+    {
+        var candidates = new[]
+        {
+            portalTile,
+            new WorldTileCoord(portalTile.X, portalTile.Y + 1),
+            new WorldTileCoord(portalTile.X + 1, portalTile.Y),
+            new WorldTileCoord(portalTile.X - 1, portalTile.Y),
+            new WorldTileCoord(portalTile.X, portalTile.Y - 1)
+        };
+
+        foreach (var candidate in candidates)
+        {
+            if (!world.ContainsChunk(candidate.ToChunkCoord(runtime.ChunkWidth, runtime.ChunkHeight)))
+            {
+                continue;
+            }
+
+            var position = runtime.GetWorldPosition(candidate);
+            if (!IsBlocked(position))
+            {
+                return position;
+            }
+        }
+
+        return runtime.GetWorldPosition(portalTile);
     }
 
     private void UpdatePlayerMovement(float deltaSeconds, Vector2 movement)
@@ -354,7 +485,8 @@ public sealed class GameSimulation(GameRuntime runtime)
             return;
         }
 
-        var tile = new Vector2(MathF.Floor(input.PointerWorld.X / 32f) * 32f, MathF.Floor(input.PointerWorld.Y / 32f) * 32f);
+        var tileCoord = runtime.GetWorldTile(input.PointerWorld);
+        var tile = runtime.GetWorldPosition(tileCoord);
         if (runtime.WorldState.Entities.Any(entity => !entity.Removed && Vector2.Distance(entity.Position, tile) < 8f))
         {
             return;
@@ -366,11 +498,14 @@ public sealed class GameSimulation(GameRuntime runtime)
         }
 
         var placeableDef = runtime.Content.Placeables.Get(itemDef.PlaceableId.Value);
-        runtime.WorldState.AddEntity(new WorldEntityState(
+        runtime.WorldState.GetActiveWorld().AddRuntimeEntity(new WorldEntityState(
             WorldEntityKind.Placeable,
             placeableDef.Id,
             tile,
-            placeableDef.MaxDurability));
+            placeableDef.MaxDurability,
+            runtime.ActiveWorldSpaceKind,
+            tileCoord.ToChunkCoord(runtime.ChunkWidth, runtime.ChunkHeight)));
+        runtime.WorldState.RefreshEntityProjection();
         slot.Remove(1);
     }
 
@@ -473,7 +608,7 @@ public sealed class GameSimulation(GameRuntime runtime)
     private WorldEntityState? GetNearestDestructible()
     {
         return runtime.WorldState.Entities
-            .Where(entity => !entity.Removed && entity.Kind is WorldEntityKind.ResourceNode or WorldEntityKind.Placeable)
+            .Where(entity => !entity.Removed && IsDestructible(entity))
             .OrderBy(entity => Vector2.Distance(entity.Position, runtime.Player.Position))
             .FirstOrDefault(entity => Vector2.Distance(entity.Position, runtime.Player.Position) <= InteractionRange);
     }
@@ -501,6 +636,12 @@ public sealed class GameSimulation(GameRuntime runtime)
 
     private void InteractPlaceable(WorldEntityState entity)
     {
+        if (entity.DefinitionId == _portalId)
+        {
+            StartPortalTravel(entity);
+            return;
+        }
+
         var def = runtime.Content.Placeables.Get(entity.DefinitionId);
         if (def.IsCraftingStation && def.CraftingStationKey is not null)
         {
@@ -514,6 +655,52 @@ public sealed class GameSimulation(GameRuntime runtime)
         {
             entity.OpenState = !entity.OpenState;
         }
+    }
+
+    private void StartPortalTravel(WorldEntityState entity)
+    {
+        if (runtime.WorldState.Travel.IsActive)
+        {
+            return;
+        }
+
+        if (runtime.ActiveWorldSpaceKind == WorldSpaceKind.DimShardPocket && !runtime.DimShardPocket.LoadedChunks.ContainsKey(new ChunkCoord(0, 0)))
+        {
+            UpdateLoadedChunksForWorld(runtime.DimShardPocket, new WorldTileCoord(0, 0));
+        }
+
+        var targetWorld = runtime.ActiveWorldSpaceKind == WorldSpaceKind.Overworld
+            ? WorldSpaceKind.DimShardPocket
+            : WorldSpaceKind.Overworld;
+        var targetTile = targetWorld == WorldSpaceKind.DimShardPocket
+            ? FindPortalTile(runtime.DimShardPocket, new ChunkCoord(0, 0))
+            : FindPortalTile(runtime.Overworld, runtime.DimShardPocket.Model.SourcePortalChunk ?? new ChunkCoord(1, 0));
+
+        runtime.WorldState.Travel.SourceWorldSpaceKind = runtime.ActiveWorldSpaceKind;
+        runtime.WorldState.Travel.TargetWorldSpaceKind = targetWorld;
+        runtime.WorldState.Travel.SourcePortalChunk = entity.ChunkCoord;
+        runtime.WorldState.Travel.SourcePortalTile = runtime.GetWorldTile(entity.Position);
+        runtime.WorldState.Travel.TargetPortalTile = targetTile;
+        runtime.WorldState.Travel.Phase = WorldTravelPhase.FadingOut;
+        runtime.WorldState.Travel.PhaseRemainingSeconds = 0.25f;
+        runtime.WorldState.SetStatusEvent(
+            targetWorld == WorldSpaceKind.DimShardPocket
+                ? new StatusEventState(StatusEventKind.EnteredPortal)
+                : new StatusEventState(StatusEventKind.ReturnedThroughPortal),
+            1.25f);
+    }
+
+    private WorldTileCoord FindPortalTile(LoadedWorldState world, ChunkCoord preferredChunk)
+    {
+        if (!world.LoadedChunks.ContainsKey(preferredChunk))
+        {
+            var generated = runtime.GetWorldGenerator(world.WorldSpaceKind)
+                .GenerateChunk(world.WorldSpaceKind, world.WorldSeed, preferredChunk, runtime.ChunkWidth, runtime.ChunkHeight);
+            world.LoadChunk(generated, chunk => GameBootstrapper.CreateChunkRuntimeState(runtime, chunk));
+        }
+
+        var portal = world.LoadedChunks[preferredChunk].Entities.FirstOrDefault(candidate => candidate.DefinitionId == _portalId);
+        return portal is null ? new WorldTileCoord(0, 0) : runtime.GetWorldTile(portal.Position);
     }
 
     private void PickupDrop(WorldEntityState entity)
@@ -541,14 +728,29 @@ public sealed class GameSimulation(GameRuntime runtime)
                 var resourceDef = runtime.Content.ResourceNodes.Get(entity.DefinitionId);
                 foreach (var drop in resourceDef.Drops)
                 {
-                    runtime.WorldState.AddEntity(new WorldEntityState(WorldEntityKind.ItemDrop, drop.ItemId, entity.Position, 1, drop.Amount));
+                    var worldTile = runtime.GetWorldTile(entity.Position);
+                    runtime.GetWorld(entity.WorldSpaceKind).AddRuntimeEntity(new WorldEntityState(
+                        WorldEntityKind.ItemDrop,
+                        drop.ItemId,
+                        entity.Position,
+                        1,
+                        entity.WorldSpaceKind,
+                        worldTile.ToChunkCoord(runtime.ChunkWidth, runtime.ChunkHeight),
+                        stackCount: drop.Amount));
                 }
                 break;
             case WorldEntityKind.Placeable:
                 var itemDef = runtime.Content.Items.All.FirstOrDefault(item => item.PlaceableId == entity.DefinitionId);
                 if (itemDef is not null)
                 {
-                    runtime.WorldState.AddEntity(new WorldEntityState(WorldEntityKind.ItemDrop, itemDef.Id, entity.Position, 1, 1));
+                    var worldTile = runtime.GetWorldTile(entity.Position);
+                    runtime.GetWorld(entity.WorldSpaceKind).AddRuntimeEntity(new WorldEntityState(
+                        WorldEntityKind.ItemDrop,
+                        itemDef.Id,
+                        entity.Position,
+                        1,
+                        entity.WorldSpaceKind,
+                        worldTile.ToChunkCoord(runtime.ChunkWidth, runtime.ChunkHeight)));
                 }
                 break;
         }
@@ -586,9 +788,9 @@ public sealed class GameSimulation(GameRuntime runtime)
 
     private Vector2 MoveWithCollision(Vector2 currentPosition, Vector2 delta, Downroot.Core.Ids.EntityId? ignoreEntityId = null)
     {
-        var desired = currentPosition + delta;
-        var slideX = new Vector2(desired.X, currentPosition.Y);
-        var slideY = new Vector2(currentPosition.X, desired.Y);
+        var desired = ClampToWorldBounds(currentPosition + delta);
+        var slideX = ClampToWorldBounds(new Vector2(desired.X, currentPosition.Y));
+        var slideY = ClampToWorldBounds(new Vector2(currentPosition.X, desired.Y));
 
         if (!IsBlocked(desired, ignoreEntityId))
         {
@@ -611,13 +813,63 @@ public sealed class GameSimulation(GameRuntime runtime)
     private bool IsBlocked(Vector2 position, Downroot.Core.Ids.EntityId? ignoreEntityId = null)
     {
         return runtime.WorldState.Entities
-            .Where(entity => !entity.Removed && entity.Kind == WorldEntityKind.Placeable && entity.Id != ignoreEntityId)
+            .Where(entity => !entity.Removed && entity.Id != ignoreEntityId)
             .Any(entity =>
             {
-                var def = runtime.Content.Placeables.Get(entity.DefinitionId);
-                var blocks = entity.OpenState ? def.BlocksMovementWhenOpen : def.BlocksMovement;
-                return blocks && Vector2.Distance(entity.Position, position) < BlockingRadius;
+                if (entity.Kind == WorldEntityKind.Placeable)
+                {
+                    var def = runtime.Content.Placeables.Get(entity.DefinitionId);
+                    var blocks = entity.OpenState ? def.BlocksMovementWhenOpen : def.BlocksMovement;
+                    return blocks && Vector2.Distance(entity.Position, position) < BlockingRadius;
+                }
+
+                if (entity.Kind == WorldEntityKind.ResourceNode)
+                {
+                    var def = runtime.Content.ResourceNodes.Get(entity.DefinitionId);
+                    return def.BlocksMovement && Vector2.Distance(entity.Position, position) < BlockingRadius;
+                }
+
+                return false;
             });
+    }
+
+    private Vector2 ClampToWorldBounds(Vector2 position)
+    {
+        var world = runtime.WorldState.GetActiveWorld();
+        if (world.Model.MinChunkCoord is not { } min || world.Model.MaxChunkCoord is not { } max)
+        {
+            return position;
+        }
+
+        var minTile = WorldTileCoord.FromChunkAndLocal(min, new LocalTileCoord(0, 0), runtime.ChunkWidth, runtime.ChunkHeight);
+        var maxTile = WorldTileCoord.FromChunkAndLocal(max, new LocalTileCoord(runtime.ChunkWidth - 1, runtime.ChunkHeight - 1), runtime.ChunkWidth, runtime.ChunkHeight);
+        return new Vector2(
+            Math.Clamp(position.X, minTile.X * 32f, maxTile.X * 32f),
+            Math.Clamp(position.Y, minTile.Y * 32f, maxTile.Y * 32f));
+    }
+
+    private void ReassignRuntimeEntities()
+    {
+        var world = runtime.WorldState.GetActiveWorld();
+        foreach (var sourceChunk in world.LoadedChunks.Values.ToArray())
+        {
+            foreach (var entity in sourceChunk.RuntimeEntities.Values.Where(entity => !entity.Removed).ToArray())
+            {
+                var targetChunk = runtime.GetChunkCoord(entity.Position);
+                if (targetChunk == entity.ChunkCoord || !world.ContainsChunk(targetChunk) || !world.LoadedChunks.ContainsKey(targetChunk))
+                {
+                    continue;
+                }
+
+                if (!sourceChunk.TakeRuntimeEntity(entity.Id, out _))
+                {
+                    continue;
+                }
+
+                entity.ChunkCoord = targetChunk;
+                world.LoadedChunks[targetChunk].AddRuntimeEntity(entity);
+            }
+        }
     }
 
     private void PublishCraftResult(RecipeDef recipe, bool success, string message, StatusEventState statusEvent)
@@ -674,6 +926,16 @@ public sealed class GameSimulation(GameRuntime runtime)
     {
         var def = runtime.Content.ResourceNodes.Get(entity.DefinitionId);
         return def.InstantPickup || def.DirectConsume;
+    }
+
+    private bool IsDestructible(WorldEntityState entity)
+    {
+        return entity.Kind switch
+        {
+            WorldEntityKind.ResourceNode => true,
+            WorldEntityKind.Placeable => runtime.Content.Placeables.Get(entity.DefinitionId).CanBeDestroyed,
+            _ => false
+        };
     }
 
     private bool TryGetNearbyWorkbench(out WorldEntityState station)

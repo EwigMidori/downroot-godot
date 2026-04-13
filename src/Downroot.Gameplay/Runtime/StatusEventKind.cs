@@ -8,5 +8,7 @@ public enum StatusEventKind
     MissingIngredient,
     StationRequired,
     InventoryFull,
-    CraftFailed
+    CraftFailed,
+    EnteredPortal,
+    ReturnedThroughPortal
 }

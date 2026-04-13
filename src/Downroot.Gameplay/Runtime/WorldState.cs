@@ -1,4 +1,5 @@
 using Downroot.Core.Ids;
+using Downroot.Core.World;
 
 namespace Downroot.Gameplay.Runtime;
 
@@ -7,6 +8,10 @@ public sealed class WorldState
     private readonly List<WorldEntityState> _entities = [];
 
     public IReadOnlyList<WorldEntityState> Entities => _entities;
+    public WorldSpaceKind ActiveWorldSpaceKind { get; set; } = WorldSpaceKind.Overworld;
+    public required LoadedWorldState Overworld { get; init; }
+    public required LoadedWorldState DimShardPocket { get; init; }
+    public WorldTravelState Travel { get; } = new();
     public float TimeOfDaySeconds { get; set; }
     public float TotalElapsedSeconds { get; set; }
     public CraftWorkspaceMode WorkspaceMode { get; set; }
@@ -21,7 +26,22 @@ public sealed class WorldState
 
     public bool IsNight(float dayLengthSeconds) => TimeOfDaySeconds >= dayLengthSeconds * 0.5f;
 
-    public void AddEntity(WorldEntityState entity) => _entities.Add(entity);
+    public LoadedWorldState GetActiveWorld()
+    {
+        return ActiveWorldSpaceKind == WorldSpaceKind.Overworld
+            ? Overworld
+            : DimShardPocket;
+    }
+
+    public void RefreshEntityProjection()
+    {
+        _entities.Clear();
+        _entities.AddRange(GetActiveWorld()
+            .EnumerateEntities()
+            .Where(entity => !entity.Removed)
+            .OrderBy(entity => entity.Position.Y)
+            .ThenBy(entity => entity.Position.X));
+    }
 
     public void SetStatusEvent(StatusEventState statusEvent, float seconds = 2f)
     {
@@ -49,5 +69,24 @@ public sealed class WorldState
         }
     }
 
-    public void RemoveDeleted() => _entities.RemoveAll(entity => entity.Removed);
+    public void RemoveDeleted()
+    {
+        foreach (var world in new[] { Overworld, DimShardPocket })
+        {
+            foreach (var chunk in world.LoadedChunks.Values)
+            {
+                foreach (var removedNatural in chunk.NaturalEntities.Values.Where(entity => entity.Removed).ToArray())
+                {
+                    chunk.RemoveEntity(removedNatural);
+                }
+
+                foreach (var removedRuntime in chunk.RuntimeEntities.Values.Where(entity => entity.Removed).ToArray())
+                {
+                    chunk.RemoveEntity(removedRuntime);
+                }
+            }
+        }
+
+        RefreshEntityProjection();
+    }
 }

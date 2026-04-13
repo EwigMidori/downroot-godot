@@ -19,4 +19,5 @@ public sealed record PlaceableDef(
     int OpenAtlasColumn = 0,
     int OpenAtlasRow = 0,
     bool BlocksMovementWhenOpen = false,
-    bool IsGroundCover = false) : ContentDef(Id, DisplayName, SourcePackId);
+    bool IsGroundCover = false,
+    bool CanBeDestroyed = true) : ContentDef(Id, DisplayName, SourcePackId);

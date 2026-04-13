@@ -18,7 +18,7 @@ public sealed class FillTerrainPass(ContentId terrainId, string surfaceRegion) :
         {
             for (var x = 0; x < context.Width; x++)
             {
-                var coord = new TileCoord(x, y);
+                var coord = new LocalTileCoord(x, y);
                 context.SetBaseTerrain(coord, terrainId);
                 context.SetCoverTerrain(coord, null);
                 context.SetSurfaceRegion(coord, surfaceRegion);

@@ -22,8 +22,9 @@ public sealed class GrassRegionPass(ContentId terrainId) : IWorldGenPass
         {
             for (var x = 0; x < context.Width; x++)
             {
-                var value = SampleLayeredNoise(x, y);
-                var coord = new TileCoord(x, y);
+                var coord = new LocalTileCoord(x, y);
+                var worldCoord = context.GetWorldTileCoord(coord);
+                var value = SampleLayeredNoise(context, worldCoord);
                 if (value >= GrassThreshold)
                 {
                     context.SetCoverTerrain(coord, terrainId);
@@ -41,14 +42,14 @@ public sealed class GrassRegionPass(ContentId terrainId) : IWorldGenPass
         }
     }
 
-    private static float SampleLayeredNoise(int x, int y)
+    private static float SampleLayeredNoise(IWorldGenContext context, WorldTileCoord coord)
     {
-        var baseNoise = SampleValueNoise(x * BaseFrequency, y * BaseFrequency, 17);
-        var detailNoise = SampleValueNoise(x * DetailFrequency, y * DetailFrequency, 79);
+        var baseNoise = SampleValueNoise(context, coord.X * BaseFrequency, coord.Y * BaseFrequency, 17);
+        var detailNoise = SampleValueNoise(context, coord.X * DetailFrequency, coord.Y * DetailFrequency, 79);
         return baseNoise * 0.75f + detailNoise * 0.25f;
     }
 
-    private static float SampleValueNoise(float x, float y, int seed)
+    private static float SampleValueNoise(IWorldGenContext context, float x, float y, int seed)
     {
         var x0 = (int)MathF.Floor(x);
         var y0 = (int)MathF.Floor(y);
@@ -58,23 +59,19 @@ public sealed class GrassRegionPass(ContentId terrainId) : IWorldGenPass
         var tx = SmoothStep(x - x0);
         var ty = SmoothStep(y - y0);
 
-        var v00 = HashToUnitFloat(x0, y0, seed);
-        var v10 = HashToUnitFloat(x1, y0, seed);
-        var v01 = HashToUnitFloat(x0, y1, seed);
-        var v11 = HashToUnitFloat(x1, y1, seed);
+        var v00 = HashToUnitFloat(context, x0, y0, seed);
+        var v10 = HashToUnitFloat(context, x1, y0, seed);
+        var v01 = HashToUnitFloat(context, x0, y1, seed);
+        var v11 = HashToUnitFloat(context, x1, y1, seed);
 
         var top = Lerp(v00, v10, tx);
         var bottom = Lerp(v01, v11, tx);
         return Lerp(top, bottom, ty);
     }
 
-    private static float HashToUnitFloat(int x, int y, int seed)
+    private static float HashToUnitFloat(IWorldGenContext context, int x, int y, int seed)
     {
-        var hash = x * 374761393 + y * 668265263 + seed * 69069;
-        hash = (hash ^ (hash >> 13)) * 1274126177;
-        hash ^= hash >> 16;
-        var positive = hash & 0x7fffffff;
-        return positive / (float)int.MaxValue;
+        return context.GetStableUnitValue(new WorldTileCoord(x, y), seed);
     }
 
     private static float SmoothStep(float value) => value * value * (3f - 2f * value);

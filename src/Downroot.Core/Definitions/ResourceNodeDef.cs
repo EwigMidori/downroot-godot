@@ -13,6 +13,7 @@ public sealed record ResourceNodeDef(
     int AtlasRow,
     int MaxDurability,
     IReadOnlyList<ItemAmount> Drops,
+    bool BlocksMovement = false,
     bool InstantPickup = false,
     bool DirectConsume = false,
     int HungerRestore = 0,

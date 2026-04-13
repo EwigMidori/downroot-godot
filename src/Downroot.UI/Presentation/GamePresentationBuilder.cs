@@ -150,6 +150,8 @@ public sealed class GamePresentationBuilder
             { Kind: StatusEventKind.MissingIngredient } => new StatusBannerViewData(true, $"Need {ResolveItemName(runtime.Content, statusEvent.PrimaryContentId!.Value)} x{statusEvent.Amount}"),
             { Kind: StatusEventKind.StationRequired } => new StatusBannerViewData(true, "Need a nearby station"),
             { Kind: StatusEventKind.InventoryFull } => new StatusBannerViewData(true, "Inventory full"),
+            { Kind: StatusEventKind.EnteredPortal } => new StatusBannerViewData(true, "Entering Portal"),
+            { Kind: StatusEventKind.ReturnedThroughPortal } => new StatusBannerViewData(true, "Returned to Overworld"),
             _ => new StatusBannerViewData(true, "Craft failed")
         };
     }

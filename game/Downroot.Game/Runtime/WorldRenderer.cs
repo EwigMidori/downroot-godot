@@ -1,6 +1,7 @@
 using Downroot.Core.Definitions;
 using Downroot.Core.Ids;
 using Downroot.Core.Input;
+using Downroot.Core.World;
 using Downroot.Game.Infrastructure;
 using Downroot.Gameplay.Runtime;
 using Godot;
@@ -16,6 +17,8 @@ public sealed partial class WorldRenderer : Node2D
     private readonly PlayerAnimationFactory _animationFactory;
     private readonly Dictionary<string, Texture2D> _textureCache = [];
     private readonly Dictionary<EntityId, Sprite2D> _entitySprites = [];
+    private readonly Dictionary<EntityId, ChunkCoord> _entitySpriteChunks = [];
+    private readonly Dictionary<ChunkCoord, ChunkVisualState> _chunkVisuals = [];
 
     private GameRuntime? _runtime;
     private Node2D? _terrainLayer;
@@ -38,9 +41,8 @@ public sealed partial class WorldRenderer : Node2D
         _entityLayer = new Node2D { Name = "EntityLayer" };
         AddChild(_terrainLayer);
         AddChild(_entityLayer);
-
-        BuildStaticTerrain();
         CreatePlayer();
+        SynchronizeChunks();
         SynchronizeEntities();
     }
 
@@ -53,7 +55,6 @@ public sealed partial class WorldRenderer : Node2D
 
         _playerBody.Position = ToGodot(_runtime.Player.Position);
         _playerBody.Velocity = ToGodot(frame.Movement * _runtime.Player.Speed);
-
         if (frame.Movement != NumericsVector2.Zero)
         {
             _lastFacing = ResolveFacing(frame.Movement);
@@ -64,6 +65,7 @@ public sealed partial class WorldRenderer : Node2D
             _playerSprite.Play($"idle_{_lastFacing}");
         }
 
+        SynchronizeChunks();
         SynchronizeEntities();
     }
 
@@ -71,22 +73,14 @@ public sealed partial class WorldRenderer : Node2D
     {
         _ = ResolveTerrainTexture(runtime.Content.Terrains.Get(new ContentId("basegame:grass")));
         _ = ResolveTerrainTexture(runtime.Content.Terrains.Get(new ContentId("basegame:dirt")));
+        _ = ResolveTerrainTexture(runtime.Content.Terrains.Get(new ContentId("basegame:river_water")));
+        _ = ResolveTerrainTexture(runtime.Content.Terrains.Get(new ContentId("basegame:dimfrag")));
         _ = ResolveItemTexture(runtime.Content.Items.Get(new ContentId("basegame:stone")));
-        _ = ResolveItemTexture(runtime.Content.Items.Get(new ContentId("basegame:voidite")));
-        _ = ResolveItemTexture(runtime.Content.Items.Get(new ContentId("basegame:goldvein")));
-        _ = ResolveItemTexture(runtime.Content.Items.Get(new ContentId("basegame:venomite")));
-        _ = ResolveItemTexture(runtime.Content.Items.Get(new ContentId("basegame:furnace_item")));
-        _ = ResolveItemTexture(runtime.Content.Items.Get(new ContentId("basegame:axe")));
-        _ = ResolveItemTexture(runtime.Content.Items.Get(new ContentId("basegame:iron_knife")));
-        _ = ResolvePlaceableTexture(runtime.Content.Placeables.Get(new ContentId("basegame:workbench")), false);
-        _ = ResolvePlaceableTexture(runtime.Content.Placeables.Get(new ContentId("basegame:furnace")), false);
-        _ = ResolvePlaceableTexture(runtime.Content.Placeables.Get(new ContentId("basegame:stone_wall")), false);
-        _ = ResolvePlaceableTexture(runtime.Content.Placeables.Get(new ContentId("basegame:stone_floor")), false);
-        _ = ResolveResourceNodeTexture(runtime.Content.ResourceNodes.Get(new ContentId("basegame:voidite_node")));
-        _ = ResolveResourceNodeTexture(runtime.Content.ResourceNodes.Get(new ContentId("basegame:goldvein_node")));
-        _ = ResolveResourceNodeTexture(runtime.Content.ResourceNodes.Get(new ContentId("basegame:venomite_node")));
-        _ = ResolveCreatureTexture(runtime.Content.Creatures.Get(new ContentId("basegame:cockroach")));
-        GD.Print($"Terrain tiles: {runtime.World.Surface.Width}x{runtime.World.Surface.Height}, entities: {runtime.WorldState.Entities.Count}");
+        _ = ResolveItemTexture(runtime.Content.Items.Get(new ContentId("basegame:frostcore")));
+        _ = ResolvePlaceableTexture(runtime.Content.Placeables.Get(new ContentId("basegame:portal")), false);
+        _ = ResolveResourceNodeTexture(runtime.Content.ResourceNodes.Get(new ContentId("basegame:rock_outcrop")));
+        _ = ResolveResourceNodeTexture(runtime.Content.ResourceNodes.Get(new ContentId("basegame:frostcore_node")));
+        GD.Print($"Loaded chunks: {runtime.WorldState.GetActiveWorld().LoadedChunks.Count}, active entities: {runtime.WorldState.Entities.Count}");
     }
 
     public Vector2 WorldToScreen(NumericsVector2 worldPosition)
@@ -99,22 +93,48 @@ public sealed partial class WorldRenderer : Node2D
         return ResolveItemTexture(_runtime!.Content.Items.Get(itemId));
     }
 
-    private void BuildStaticTerrain()
+    private void SynchronizeChunks()
     {
-        var runtime = _runtime ?? throw new InvalidOperationException("WorldRenderer.Initialize must be called before terrain build.");
-
-        for (var y = 0; y < runtime.World.Surface.Height; y++)
+        var world = _runtime!.WorldState.GetActiveWorld();
+        var desiredChunks = world.LoadedChunks.Keys.ToHashSet();
+        foreach (var staleChunk in _chunkVisuals.Keys.Where(coord => !desiredChunks.Contains(coord)).ToArray())
         {
-            for (var x = 0; x < runtime.World.Surface.Width; x++)
+            _chunkVisuals[staleChunk].TerrainRoot.QueueFree();
+            _chunkVisuals[staleChunk].EntityRoot.QueueFree();
+            _chunkVisuals.Remove(staleChunk);
+        }
+
+        foreach (var pair in world.LoadedChunks.OrderBy(pair => pair.Key.Y).ThenBy(pair => pair.Key.X))
+        {
+            if (_chunkVisuals.ContainsKey(pair.Key))
             {
-                var terrainId = runtime.World.Surface.GetTerrainId(x, y) ?? runtime.BootstrapConfig.DefaultTerrainId;
-                var terrainDef = runtime.Content.Terrains.Get(terrainId);
-                _terrainLayer!.AddChild(new Sprite2D
+                continue;
+            }
+
+            var terrainRoot = new Node2D { Name = $"ChunkTerrain_{pair.Key.X}_{pair.Key.Y}" };
+            var entityRoot = new Node2D { Name = $"ChunkEntities_{pair.Key.X}_{pair.Key.Y}" };
+            _terrainLayer!.AddChild(terrainRoot);
+            _entityLayer!.AddChild(entityRoot);
+            _chunkVisuals.Add(pair.Key, new ChunkVisualState(terrainRoot, entityRoot));
+            BuildChunkTerrain(pair.Value.GeneratedChunk, terrainRoot);
+        }
+    }
+
+    private void BuildChunkTerrain(Downroot.World.Models.GeneratedChunk chunk, Node2D terrainRoot)
+    {
+        var chunkOriginTile = WorldTileCoord.FromChunkAndLocal(chunk.Coord, new LocalTileCoord(0, 0), _runtime!.ChunkWidth, _runtime.ChunkHeight);
+        for (var y = 0; y < chunk.Surface.Height; y++)
+        {
+            for (var x = 0; x < chunk.Surface.Width; x++)
+            {
+                var terrainId = chunk.Surface.GetTerrainId(x, y) ?? _runtime.BootstrapConfig.DefaultTerrainId;
+                var terrainDef = _runtime.Content.Terrains.Get(terrainId);
+                terrainRoot.AddChild(new Sprite2D
                 {
                     Name = $"Terrain_{x}_{y}",
                     Centered = false,
                     Texture = ResolveTerrainTexture(terrainDef),
-                    Position = new Vector2(x * TileSize, y * TileSize)
+                    Position = new Vector2((chunkOriginTile.X + x) * TileSize, (chunkOriginTile.Y + y) * TileSize)
                 });
             }
         }
@@ -124,7 +144,6 @@ public sealed partial class WorldRenderer : Node2D
     {
         var creature = _runtime!.Content.Creatures.Get(_runtime.BootstrapConfig.PlayerCreatureId);
         var frames = _animationFactory.Create(creature);
-
         _playerBody = new CharacterBody2D
         {
             Name = "Player",
@@ -151,21 +170,33 @@ public sealed partial class WorldRenderer : Node2D
 
     private void SynchronizeEntities()
     {
-        var aliveIds = _runtime!.WorldState.Entities.Where(entity => !entity.Removed).Select(entity => entity.Id).ToHashSet();
-
+        var activeWorld = _runtime!.WorldState.GetActiveWorld();
+        var aliveIds = _runtime.WorldState.Entities.Where(entity => !entity.Removed).Select(entity => entity.Id).ToHashSet();
         foreach (var removedId in _entitySprites.Keys.Where(id => !aliveIds.Contains(id)).ToArray())
         {
             _entitySprites[removedId].QueueFree();
             _entitySprites.Remove(removedId);
+            _entitySpriteChunks.Remove(removedId);
         }
 
         foreach (var entity in _runtime.WorldState.Entities.Where(entity => !entity.Removed))
         {
+            if (!_chunkVisuals.TryGetValue(entity.ChunkCoord, out var chunkVisual))
+            {
+                continue;
+            }
+
             if (!_entitySprites.TryGetValue(entity.Id, out var sprite))
             {
                 sprite = new Sprite2D { Centered = false };
-                _entityLayer!.AddChild(sprite);
+                chunkVisual.EntityRoot.AddChild(sprite);
                 _entitySprites.Add(entity.Id, sprite);
+                _entitySpriteChunks[entity.Id] = entity.ChunkCoord;
+            }
+            else if (_entitySpriteChunks[entity.Id] != entity.ChunkCoord)
+            {
+                sprite.Reparent(chunkVisual.EntityRoot);
+                _entitySpriteChunks[entity.Id] = entity.ChunkCoord;
             }
 
             sprite.Texture = entity.Kind switch
@@ -178,9 +209,7 @@ public sealed partial class WorldRenderer : Node2D
             };
             sprite.Position = ToGodot(entity.Position);
             sprite.FlipH = entity.Kind == WorldEntityKind.Creature && entity.Position.X > _runtime.Player.Position.X;
-            sprite.Modulate = entity.HitFlashSeconds > 0f
-                ? new Color(1f, 0.65f, 0.65f, 1f)
-                : Colors.White;
+            sprite.Modulate = entity.HitFlashSeconds > 0f ? new Color(1f, 0.65f, 0.65f, 1f) : Colors.White;
             sprite.ZIndex = ResolveZIndex(entity);
         }
     }
@@ -240,4 +269,6 @@ public sealed partial class WorldRenderer : Node2D
     }
 
     private static Vector2 ToGodot(NumericsVector2 vector) => new(vector.X, vector.Y);
+
+    private sealed record ChunkVisualState(Node2D TerrainRoot, Node2D EntityRoot);
 }

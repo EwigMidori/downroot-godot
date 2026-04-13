@@ -18,6 +18,8 @@ public partial class GameRoot : Node2D
     private StartupOverlayController? _startupOverlay;
     private WorldRenderer? _worldRenderer;
     private HudController? _hudController;
+    private CanvasLayer? _travelOverlayLayer;
+    private ColorRect? _travelOverlay;
 
     public override void _Ready()
     {
@@ -51,6 +53,7 @@ public partial class GameRoot : Node2D
             _worldRenderer = new WorldRenderer(_textureLoader, _animationFactory);
             AddChild(_worldRenderer);
             _worldRenderer.Initialize(_runtime);
+            InitializeTravelOverlay();
 
             _startupOverlay.UpdateStatus("Validating content");
             _worldRenderer.ValidateContentLoads(_runtime);
@@ -78,5 +81,32 @@ public partial class GameRoot : Node2D
         _simulation.Tick((float)delta, frame);
         _worldRenderer.Update(frame);
         _hudController.Refresh(_runtime, _worldRenderer.WorldToScreen);
+        UpdateTravelOverlay();
+    }
+
+    private void InitializeTravelOverlay()
+    {
+        _travelOverlayLayer = new CanvasLayer();
+        _travelOverlay = new ColorRect
+        {
+            Color = new Color(0f, 0f, 0f, 0f),
+            MouseFilter = Control.MouseFilterEnum.Ignore
+        };
+        _travelOverlay.SetAnchorsPreset(Control.LayoutPreset.FullRect);
+        _travelOverlay.SetOffsetsPreset(Control.LayoutPreset.FullRect);
+        _travelOverlayLayer.AddChild(_travelOverlay);
+        AddChild(_travelOverlayLayer);
+    }
+
+    private void UpdateTravelOverlay()
+    {
+        if (_runtime is null || _travelOverlay is null)
+        {
+            return;
+        }
+
+        var alpha = _runtime.WorldState.Travel.OverlayAlpha01;
+        _travelOverlay.Color = new Color(0f, 0f, 0f, alpha);
+        _travelOverlay.Visible = alpha > 0f;
     }
 }
