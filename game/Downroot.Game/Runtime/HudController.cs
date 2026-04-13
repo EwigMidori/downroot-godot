@@ -27,6 +27,11 @@ public sealed class HudController
 
     public HudView View => _view;
 
+    public bool IsPointerOverBlockingUi(Vector2 screenPosition)
+    {
+        return _view.IsPointerOverBlockingUi(screenPosition);
+    }
+
     public void Initialize(GameSimulation simulation)
     {
         _simulation = simulation;

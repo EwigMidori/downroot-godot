@@ -6,6 +6,8 @@ namespace Downroot.Game.Runtime;
 
 public sealed partial class HudView : CanvasLayer
 {
+    private readonly Control[] _pointerBlockingPanels;
+
     public sealed record BarParts(Control BarRoot, Panel BarFrame, ColorRect BarTrack, ColorRect BarFill, float Width);
 
     public sealed record SlotParts(Control SlotRoot, Panel SlotBackground, Panel SelectionFrame, TextureRect ItemIcon, Label StackCountLabel);
@@ -228,6 +230,34 @@ public sealed partial class HudView : CanvasLayer
             CraftInventoryGrid.AddChild(slot.SlotRoot);
             return slot;
         }).ToArray();
+
+        _pointerBlockingPanels =
+        [
+            PlayerStatusPanel,
+            HotbarPanel,
+            PrimaryHelpPanel,
+            StatusBanner,
+            ContextPromptPanel,
+            CraftWorkspacePanel
+        ];
+    }
+
+    public bool IsPointerOverBlockingUi(Vector2 screenPosition)
+    {
+        foreach (var panel in _pointerBlockingPanels)
+        {
+            if (!panel.Visible)
+            {
+                continue;
+            }
+
+            if (panel.GetGlobalRect().HasPoint(screenPosition))
+            {
+                return true;
+            }
+        }
+
+        return false;
     }
 
     public void SetBarValue(BarParts parts, float percent)
