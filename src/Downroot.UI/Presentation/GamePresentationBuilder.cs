@@ -54,17 +54,17 @@ public sealed class GamePresentationBuilder
                 CraftWorkspaceMode.Workbench => CraftModeIconKind.Workbench,
                 _ => CraftModeIconKind.Handcraft
             },
-            mode == CraftWorkspaceMode.Hidden ? [] : BuildRecipeRows(runtime, simulation),
+            mode == CraftWorkspaceMode.Hidden ? [] : BuildRecipeRows(runtime, simulation, mode),
             runtime.Player.Inventory.Slots
                 .Take(16)
                 .Select(slot => new InventorySlotViewData(slot.ItemId, slot.Quantity))
                 .ToArray());
     }
 
-    private static IReadOnlyList<CraftRecipeViewData> BuildRecipeRows(GameRuntime runtime, GameSimulation simulation)
+    private static IReadOnlyList<CraftRecipeViewData> BuildRecipeRows(GameRuntime runtime, GameSimulation simulation, CraftWorkspaceMode mode)
     {
         var activeTask = runtime.WorldState.ActiveFurnaceTask;
-        return simulation.GetAvailableRecipes()
+        return simulation.GetRecipesForWorkspace(mode)
             .Select(recipe =>
             {
                 var costs = recipe.Ingredients

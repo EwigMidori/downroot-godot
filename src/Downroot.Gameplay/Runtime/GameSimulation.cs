@@ -41,9 +41,9 @@ public sealed class GameSimulation(GameRuntime runtime)
         _previousDestroyHeld = input.DestroyHeld;
     }
 
-    public IReadOnlyList<RecipeDef> GetAvailableRecipes()
+    public IReadOnlyList<RecipeDef> GetRecipesForWorkspace(CraftWorkspaceMode workspaceMode)
     {
-        return runtime.WorldState.WorkspaceMode switch
+        return workspaceMode switch
         {
             CraftWorkspaceMode.Handcraft => runtime.Content.Recipes.All.Where(recipe => recipe.RequiredStationKey is null).ToArray(),
             CraftWorkspaceMode.Workbench => runtime.Content.Recipes.All.Where(recipe => recipe.RequiredStationKey == "workbench").ToArray(),
