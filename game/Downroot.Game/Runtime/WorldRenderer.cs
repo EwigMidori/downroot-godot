@@ -101,21 +101,19 @@ public sealed partial class WorldRenderer : Node2D
 
     private void BuildStaticTerrain()
     {
-        var defaultTerrainDef = _runtime!.Content.Terrains.Get(_runtime.BootstrapConfig.DefaultTerrainId);
-        var variantTerrainDef = _runtime.Content.Terrains.Get(_runtime.BootstrapConfig.DebugTerrainVariantId);
-        var defaultTexture = ResolveTerrainTexture(defaultTerrainDef);
-        var variantTexture = ResolveTerrainTexture(variantTerrainDef);
+        var runtime = _runtime ?? throw new InvalidOperationException("WorldRenderer.Initialize must be called before terrain build.");
 
-        for (var y = 0; y < _runtime.World.Surface.Height; y++)
+        for (var y = 0; y < runtime.World.Surface.Height; y++)
         {
-            for (var x = 0; x < _runtime.World.Surface.Width; x++)
+            for (var x = 0; x < runtime.World.Surface.Width; x++)
             {
-                var terrainId = _runtime.World.Surface.GetTerrainId(x, y) ?? defaultTerrainDef.Id;
+                var terrainId = runtime.World.Surface.GetTerrainId(x, y) ?? runtime.BootstrapConfig.DefaultTerrainId;
+                var terrainDef = runtime.Content.Terrains.Get(terrainId);
                 _terrainLayer!.AddChild(new Sprite2D
                 {
                     Name = $"Terrain_{x}_{y}",
                     Centered = false,
-                    Texture = terrainId == variantTerrainDef.Id ? variantTexture : defaultTexture,
+                    Texture = ResolveTerrainTexture(terrainDef),
                     Position = new Vector2(x * TileSize, y * TileSize)
                 });
             }

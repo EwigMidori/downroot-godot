@@ -9,7 +9,7 @@ public static class WorldGenPassFactory
     {
         return definition.PassType switch
         {
-            "fill-terrain" => new FillTerrainPass(definition.TargetId),
+            "fill-terrain" => new FillTerrainPass(definition.TargetId, definition.PrimarySurfaceRegion ?? SurfaceRegions.DirtField),
             "grass-region" => new GrassRegionPass(definition.TargetId),
             "dirt-patch" => new DirtPatchPass(definition.TargetId),
             "scatter-spawn" => new ScatterSpawnPass(
@@ -18,7 +18,9 @@ public static class WorldGenPassFactory
                 definition.StartColumn,
                 definition.StartRow,
                 definition.Width,
-                definition.Height),
+                definition.Height,
+                definition.PrimarySurfaceRegion,
+                definition.MinSpacing),
             _ => throw new InvalidOperationException($"Unknown world gen pass type '{definition.PassType}' for '{definition.Id}'.")
         };
     }

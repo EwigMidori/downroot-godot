@@ -329,16 +329,20 @@ public sealed class BaseGameContentPack : IContentPack
             "furnace",
             5f));
 
-        registrar.RegisterWorldGenPass(new WorldGenPassDef(new ContentId("basegame:fill-dirt"), "fill-terrain", dirtId));
+        registrar.RegisterWorldGenPass(new WorldGenPassDef(
+            new ContentId("basegame:fill-dirt"),
+            "fill-terrain",
+            dirtId,
+            PrimarySurfaceRegion: SurfaceRegions.DirtField));
         registrar.RegisterWorldGenPass(new WorldGenPassDef(new ContentId("basegame:grass-region"), "grass-region", grassId));
-        registrar.RegisterWorldGenPass(new WorldGenPassDef(new ContentId("basegame:spawn-trees"), "scatter-spawn", treeNodeId, 14, 1, 1, 20, 12));
-        registrar.RegisterWorldGenPass(new WorldGenPassDef(new ContentId("basegame:spawn-stones"), "scatter-spawn", stoneNodeId, 10, 2, 2, 20, 10));
-        registrar.RegisterWorldGenPass(new WorldGenPassDef(new ContentId("basegame:spawn-berries"), "scatter-spawn", blueberryNodeId, 8, 4, 1, 18, 12));
-        registrar.RegisterWorldGenPass(new WorldGenPassDef(new ContentId("basegame:spawn-voidite"), "scatter-spawn", voiditeNodeId, 4, 2, 3, 22, 10));
-        registrar.RegisterWorldGenPass(new WorldGenPassDef(new ContentId("basegame:spawn-goldvein"), "scatter-spawn", goldveinNodeId, 4, 4, 2, 20, 12));
-        registrar.RegisterWorldGenPass(new WorldGenPassDef(new ContentId("basegame:spawn-venomite"), "scatter-spawn", venomiteNodeId, 4, 5, 3, 18, 10));
-        registrar.RegisterWorldGenPass(new WorldGenPassDef(new ContentId("basegame:spawn-worms"), "scatter-spawn", wormId, 3, 1, 1, 22, 12));
-        registrar.RegisterWorldGenPass(new WorldGenPassDef(new ContentId("basegame:spawn-cockroaches"), "scatter-spawn", cockroachId, 4, 2, 2, 22, 12));
+        registrar.RegisterWorldGenPass(new WorldGenPassDef(new ContentId("basegame:spawn-trees"), "scatter-spawn", treeNodeId, 14, 0, 0, 28, 18, SurfaceRegions.GrassField, 3));
+        registrar.RegisterWorldGenPass(new WorldGenPassDef(new ContentId("basegame:spawn-stones"), "scatter-spawn", stoneNodeId, 10, 0, 0, 28, 18, SurfaceRegions.DirtField, 2));
+        registrar.RegisterWorldGenPass(new WorldGenPassDef(new ContentId("basegame:spawn-berries"), "scatter-spawn", blueberryNodeId, 8, 0, 0, 28, 18, SurfaceRegions.GrassField, 2));
+        registrar.RegisterWorldGenPass(new WorldGenPassDef(new ContentId("basegame:spawn-voidite"), "scatter-spawn", voiditeNodeId, 4, 0, 0, 28, 18, SurfaceRegions.DirtField, 4));
+        registrar.RegisterWorldGenPass(new WorldGenPassDef(new ContentId("basegame:spawn-goldvein"), "scatter-spawn", goldveinNodeId, 4, 0, 0, 28, 18, SurfaceRegions.DirtField, 4));
+        registrar.RegisterWorldGenPass(new WorldGenPassDef(new ContentId("basegame:spawn-venomite"), "scatter-spawn", venomiteNodeId, 4, 0, 0, 28, 18, SurfaceRegions.DirtField, 4));
+        registrar.RegisterWorldGenPass(new WorldGenPassDef(new ContentId("basegame:spawn-worms"), "scatter-spawn", wormId, 3, 0, 0, 28, 18, SurfaceRegions.DirtField, 5));
+        registrar.RegisterWorldGenPass(new WorldGenPassDef(new ContentId("basegame:spawn-cockroaches"), "scatter-spawn", cockroachId, 4, 0, 0, 28, 18, SurfaceRegions.GrassField, 5));
 
         registrar.SetBootstrapConfig(new GameBootstrapConfig(
             WorldWidth: 28,

@@ -3,7 +3,7 @@ using Downroot.Core.Ids;
 
 namespace Downroot.World.Generation.Passes;
 
-public sealed class FillTerrainPass(ContentId terrainId) : IWorldGenPass
+public sealed class FillTerrainPass(ContentId terrainId, string surfaceRegion) : IWorldGenPass
 {
     public string Name => "fill-terrain";
 
@@ -18,7 +18,10 @@ public sealed class FillTerrainPass(ContentId terrainId) : IWorldGenPass
         {
             for (var x = 0; x < context.Width; x++)
             {
-                context.SetTerrain(new TileCoord(x, y), terrainId);
+                var coord = new TileCoord(x, y);
+                context.SetBaseTerrain(coord, terrainId);
+                context.SetCoverTerrain(coord, null);
+                context.SetSurfaceRegion(coord, surfaceRegion);
             }
         }
     }

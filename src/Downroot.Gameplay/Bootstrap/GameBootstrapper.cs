@@ -1,6 +1,7 @@
 using System.Numerics;
 using Downroot.Content.Packs;
 using Downroot.Content.Registries;
+using Downroot.Core.World;
 using Downroot.Gameplay.Runtime;
 using Downroot.World.Generation;
 
@@ -25,6 +26,7 @@ public sealed class GameBootstrapper
             registries,
             registries.WorldGenPasses.Select(WorldGenPassFactory.Create).ToArray())
             .Generate(bootstrapConfig.WorldWidth, bootstrapConfig.WorldHeight);
+        LogWorldGeneration(world);
 
         var player = new PlayerState(
             inventorySize: 16,
@@ -56,5 +58,22 @@ public sealed class GameBootstrapper
         }
 
         return new GameRuntime(registries, world, worldState, player, bootstrapConfig);
+    }
+
+    private static void LogWorldGeneration(Downroot.World.Models.WorldModel world)
+    {
+        var regionSummary = string.Join(
+            ", ",
+            world.Surface.CountSurfaceRegions()
+                .OrderBy(pair => pair.Key)
+                .Select(pair => $"{pair.Key}:{pair.Value}"));
+        var spawnSummary = string.Join(
+            ", ",
+            world.Spawns.GroupBy(spawn => spawn.ContentId.Value)
+                .OrderBy(group => group.Key)
+                .Select(group => $"{group.Key}:{group.Count()}"));
+
+        Console.WriteLine($"[WorldGen] regions => {regionSummary}");
+        Console.WriteLine($"[WorldGen] spawns => {spawnSummary}");
     }
 }

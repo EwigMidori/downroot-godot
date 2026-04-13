@@ -23,9 +23,19 @@ public sealed class GrassRegionPass(ContentId terrainId) : IWorldGenPass
             for (var x = 0; x < context.Width; x++)
             {
                 var value = SampleLayeredNoise(x, y);
+                var coord = new TileCoord(x, y);
                 if (value >= GrassThreshold)
                 {
-                    context.SetTerrain(new TileCoord(x, y), terrainId);
+                    context.SetCoverTerrain(coord, terrainId);
+                    context.SetSurfaceRegion(coord, SurfaceRegions.GrassField);
+                }
+                else
+                {
+                    context.SetCoverTerrain(coord, null);
+                    if (context.GetBaseTerrain(coord) is not null)
+                    {
+                        context.SetSurfaceRegion(coord, SurfaceRegions.DirtField);
+                    }
                 }
             }
         }
