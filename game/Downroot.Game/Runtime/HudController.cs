@@ -260,6 +260,7 @@ public sealed class HudController
         _view.PromptVerbIcon.Texture = _view.CreatePromptIcon(interactionPrompt.PromptIconKind);
         _view.PromptVerbLabel.Text = interactionPrompt.PromptVerbLabel;
         _view.PromptTargetLabel.Text = interactionPrompt.PromptTargetLabel;
+        _lastLayoutKey = null;
         _lastInteractionPrompt = interactionPrompt;
     }
 

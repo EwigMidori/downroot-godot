@@ -154,8 +154,13 @@ public sealed partial class HudView : CanvasLayer
         };
         promptRow.AddChild(PromptVerbIcon);
         PromptVerbLabel = new Label { Name = "PromptVerbLabel" };
+        PromptVerbLabel.SizeFlagsHorizontal = Control.SizeFlags.ShrinkBegin;
         promptRow.AddChild(PromptVerbLabel);
-        PromptTargetLabel = new Label { Name = "PromptTargetLabel" };
+        PromptTargetLabel = new Label
+        {
+            Name = "PromptTargetLabel",
+            SizeFlagsHorizontal = Control.SizeFlags.ExpandFill
+        };
         promptRow.AddChild(PromptTargetLabel);
 
         DestroyProgressPanel = CreateFloatingPanel("DestroyProgressPanel", new Vector2(160, 42));
