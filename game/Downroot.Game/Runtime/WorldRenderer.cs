@@ -31,6 +31,9 @@ public sealed partial class WorldRenderer : Node2D
     private CharacterBody2D? _playerBody;
     private AnimatedSprite2D? _playerSprite;
     private string _lastFacing = "down";
+    private WorldSpaceKind? _lastRenderedWorldSpaceKind;
+    private long _lastChunkVisualVersion = -1;
+    private long _lastEntityProjectionVersion = -1;
 
     public WorldRenderer(TextureContentLoader textureLoader, PlayerAnimationFactory animationFactory)
     {
@@ -48,9 +51,14 @@ public sealed partial class WorldRenderer : Node2D
         AddChild(_terrainLayer);
         AddChild(_entityLayer);
         CreatePlayer();
+        _runtime.WorldState.EnsureEntityProjectionCurrent();
         SynchronizeChunks();
         RefreshDirtyRaisedFeatures();
-        SynchronizeEntities();
+        SynchronizeEntityStructure();
+        UpdateEntitySprites();
+        _lastRenderedWorldSpaceKind = runtime.ActiveWorldSpaceKind;
+        _lastChunkVisualVersion = _worldFacade.GetActiveWorld().ChunkVisualVersion;
+        _lastEntityProjectionVersion = runtime.WorldState.EntityProjectionVersion;
     }
 
     public void Update(InputFrame frame)
@@ -60,6 +68,7 @@ public sealed partial class WorldRenderer : Node2D
             return;
         }
 
+        _runtime.WorldState.EnsureEntityProjectionCurrent();
         _playerBody.Position = ToGodot(_runtime.Player.Position);
         _playerBody.Velocity = ToGodot(frame.Movement * _runtime.Player.Speed);
         _playerBody.ZIndex = ResolvePlayerZIndex();
@@ -73,9 +82,9 @@ public sealed partial class WorldRenderer : Node2D
             _playerSprite.Play($"idle_{_lastFacing}");
         }
 
-        SynchronizeChunks();
+        SynchronizeWorldVisuals();
         RefreshDirtyRaisedFeatures();
-        SynchronizeEntities();
+        UpdateEntitySprites();
     }
 
     public void ValidateContentLoads(GameRuntime runtime)
@@ -118,6 +127,28 @@ public sealed partial class WorldRenderer : Node2D
         return ResolveItemTexture(_runtime!.Content.Items.Get(itemId));
     }
 
+    private void SynchronizeWorldVisuals()
+    {
+        var activeWorld = _worldFacade!.GetActiveWorld();
+        if (_lastRenderedWorldSpaceKind != activeWorld.WorldSpaceKind)
+        {
+            ResetWorldVisuals();
+            _lastRenderedWorldSpaceKind = activeWorld.WorldSpaceKind;
+        }
+
+        if (_lastChunkVisualVersion != activeWorld.ChunkVisualVersion)
+        {
+            SynchronizeChunks();
+            _lastChunkVisualVersion = activeWorld.ChunkVisualVersion;
+        }
+
+        if (_lastEntityProjectionVersion != _runtime!.WorldState.EntityProjectionVersion)
+        {
+            SynchronizeEntityStructure();
+            _lastEntityProjectionVersion = _runtime.WorldState.EntityProjectionVersion;
+        }
+    }
+
     private void SynchronizeChunks()
     {
         var world = _worldFacade!.GetActiveWorld();
@@ -147,6 +178,28 @@ public sealed partial class WorldRenderer : Node2D
             BuildChunkTerrain(pair.Value.GeneratedChunk, terrainRoot);
             BuildChunkRaisedFeatures(pair.Value, _chunkVisuals[pair.Key]);
         }
+    }
+
+    private void ResetWorldVisuals()
+    {
+        foreach (var visual in _chunkVisuals.Values)
+        {
+            visual.TerrainRoot.QueueFree();
+            visual.RaisedFeatureRoot.QueueFree();
+            visual.EntityRoot.QueueFree();
+        }
+
+        _chunkVisuals.Clear();
+
+        foreach (var sprite in _entitySprites.Values)
+        {
+            sprite.QueueFree();
+        }
+
+        _entitySprites.Clear();
+        _entitySpriteChunks.Clear();
+        _lastChunkVisualVersion = -1;
+        _lastEntityProjectionVersion = -1;
     }
 
     private void BuildChunkTerrain(Downroot.World.Models.GeneratedChunk chunk, Node2D terrainRoot)
@@ -253,10 +306,10 @@ public sealed partial class WorldRenderer : Node2D
         AddChild(_playerBody);
     }
 
-    private void SynchronizeEntities()
+    private void SynchronizeEntityStructure()
     {
-        var activeWorld = _runtime!.WorldState.GetActiveWorld();
-        var aliveIds = _runtime.WorldState.Entities.Where(entity => !entity.Removed).Select(entity => entity.Id).ToHashSet();
+        var runtime = _runtime!;
+        var aliveIds = runtime.WorldState.Entities.Where(entity => !entity.Removed).Select(entity => entity.Id).ToHashSet();
         foreach (var removedId in _entitySprites.Keys.Where(id => !aliveIds.Contains(id)).ToArray())
         {
             _entitySprites[removedId].QueueFree();
@@ -264,7 +317,7 @@ public sealed partial class WorldRenderer : Node2D
             _entitySpriteChunks.Remove(removedId);
         }
 
-        foreach (var entity in _runtime.WorldState.Entities.Where(entity => !entity.Removed))
+        foreach (var entity in runtime.WorldState.Entities.Where(entity => !entity.Removed))
         {
             if (!_chunkVisuals.TryGetValue(entity.ChunkCoord, out var chunkVisual))
             {
@@ -282,6 +335,17 @@ public sealed partial class WorldRenderer : Node2D
             {
                 sprite.Reparent(chunkVisual.EntityRoot);
                 _entitySpriteChunks[entity.Id] = entity.ChunkCoord;
+            }
+        }
+    }
+
+    private void UpdateEntitySprites()
+    {
+        foreach (var entity in _runtime!.WorldState.Entities.Where(entity => !entity.Removed))
+        {
+            if (!_entitySprites.TryGetValue(entity.Id, out var sprite))
+            {
+                continue;
             }
 
             sprite.Texture = entity.Kind switch

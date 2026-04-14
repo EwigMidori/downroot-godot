@@ -22,7 +22,7 @@ public sealed class InteractionSystem(
             return;
         }
 
-        var entity = worldQuery.EnumerateActiveEntities().FirstOrDefault(candidate => !candidate.Removed && candidate.Id == activeId);
+        var entity = worldQuery.TryGetActiveEntity(activeId, out var activeEntity) ? activeEntity : null;
         if (entity is null || Vector2.Distance(entity.Position, runtime.Player.Position) > StationRange)
         {
             runtime.WorldState.ActiveStationEntityId = null;
@@ -120,6 +120,7 @@ public sealed class InteractionSystem(
         else
         {
             entity.OpenState = !entity.OpenState;
+            worldFacade.NotifyEntityStateChanged(entity);
         }
     }
 

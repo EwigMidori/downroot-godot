@@ -1,3 +1,4 @@
+using Downroot.Content.Registries;
 using Downroot.Core.Ids;
 using Downroot.Core.World;
 using Downroot.World.Models;
@@ -6,11 +7,16 @@ namespace Downroot.Gameplay.Runtime;
 
 public sealed class LoadedWorldState
 {
+    private readonly ContentRegistrySet _content;
     private readonly Dictionary<ChunkCoord, ChunkRuntimeState> _loadedChunks = [];
     private readonly Dictionary<ChunkCoord, ChunkRuntimeArchive> _archivedChunks = [];
+    private readonly Dictionary<EntityId, WorldEntityState> _loadedEntitiesById = [];
+    private readonly Dictionary<WorldEntityState, WorldTileCoord> _blockerTiles = [];
+    private readonly Dictionary<WorldTileCoord, HashSet<WorldEntityState>> _blockingEntitiesByTile = [];
 
-    public LoadedWorldState(WorldModel model, int loadRadius)
+    public LoadedWorldState(ContentRegistrySet content, WorldModel model, int loadRadius)
     {
+        _content = content;
         Model = model;
         LoadRadius = loadRadius;
     }
@@ -21,16 +27,21 @@ public sealed class LoadedWorldState
     public int LoadRadius { get; }
     public Dictionary<ChunkCoord, ChunkRuntimeState> LoadedChunks => _loadedChunks;
     public HashSet<WorldTileCoord> DirtyRaisedFeatureTiles { get; } = [];
+    public long ChunkVisualVersion { get; private set; }
+    public long EntityStructureVersion { get; private set; }
+    public long BlockerVersion { get; private set; }
 
     public bool ContainsChunk(ChunkCoord coord) => Model.ContainsChunk(coord);
 
     public IEnumerable<WorldEntityState> EnumerateEntities() => EnumerateLoadedEntities();
 
-    public IEnumerable<WorldEntityState> EnumerateLoadedEntities() => _loadedChunks.Values.SelectMany(chunk => chunk.Entities);
+    public IEnumerable<WorldEntityState> EnumerateLoadedEntities() => _loadedEntitiesById.Values;
 
-    public IEnumerable<WorldEntityState> EnumerateLoadedEntities(WorldEntityKind kind) => EnumerateLoadedEntities().Where(entity => entity.Kind == kind);
+    public IEnumerable<WorldEntityState> EnumerateLoadedEntities(WorldEntityKind kind) => _loadedEntitiesById.Values.Where(entity => entity.Kind == kind);
 
     public bool TryGetChunk(ChunkCoord coord, out ChunkRuntimeState chunk) => _loadedChunks.TryGetValue(coord, out chunk!);
+
+    public bool TryGetEntity(EntityId entityId, out WorldEntityState entity) => _loadedEntitiesById.TryGetValue(entityId, out entity!);
 
     public bool TryGetChunkForTile(WorldTileCoord tile, int chunkWidth, int chunkHeight, out ChunkRuntimeState chunk, out LocalTileCoord localCoord)
     {
@@ -160,13 +171,19 @@ public sealed class LoadedWorldState
         }
 
         _loadedChunks.Add(generatedChunk.Coord, chunk);
+        IndexChunkEntities(chunk);
+        IncrementChunkVisualVersion();
+        IncrementEntityStructureVersion();
     }
 
     public void UnloadChunk(ChunkCoord coord)
     {
         if (_loadedChunks.Remove(coord, out var chunk))
         {
+            RemoveChunkEntitiesFromIndexes(chunk);
             _archivedChunks[coord] = chunk.CreateArchive();
+            IncrementChunkVisualVersion();
+            IncrementEntityStructureVersion();
         }
     }
 
@@ -178,22 +195,86 @@ public sealed class LoadedWorldState
         }
 
         chunk.AddRuntimeEntity(entity);
+        IndexEntity(entity);
+        IncrementEntityStructureVersion();
     }
 
     public bool TryFindEntity(EntityId entityId, out WorldEntityState? entity, out ChunkRuntimeState? chunk)
     {
-        foreach (var loadedChunk in _loadedChunks.Values)
+        if (_loadedEntitiesById.TryGetValue(entityId, out var loadedEntity)
+            && _loadedChunks.TryGetValue(loadedEntity.ChunkCoord, out var loadedChunk))
         {
-            entity = loadedChunk.Entities.FirstOrDefault(candidate => candidate.Id == entityId);
-            if (entity is not null)
-            {
-                chunk = loadedChunk;
-                return true;
-            }
+            entity = loadedEntity;
+            chunk = loadedChunk;
+            return true;
         }
 
         entity = null;
         chunk = null;
+        return false;
+    }
+
+    public bool RemoveEntity(WorldEntityState entity)
+    {
+        if (!_loadedChunks.TryGetValue(entity.ChunkCoord, out var chunk))
+        {
+            return false;
+        }
+
+        if (!chunk.RemoveEntity(entity))
+        {
+            return false;
+        }
+
+        UnindexEntity(entity);
+        IncrementEntityStructureVersion();
+        return true;
+    }
+
+    public bool MoveRuntimeEntity(EntityId entityId, ChunkCoord targetChunk)
+    {
+        if (!_loadedEntitiesById.TryGetValue(entityId, out var entity)
+            || !_loadedChunks.TryGetValue(entity.ChunkCoord, out var sourceChunk)
+            || !_loadedChunks.TryGetValue(targetChunk, out var destinationChunk))
+        {
+            return false;
+        }
+
+        if (!sourceChunk.TakeRuntimeEntity(entityId, out _))
+        {
+            return false;
+        }
+
+        UnindexEntity(entity);
+        entity.ChunkCoord = targetChunk;
+        destinationChunk.AddRuntimeEntity(entity);
+        IndexEntity(entity);
+        IncrementEntityStructureVersion();
+        return true;
+    }
+
+    public void NotifyEntityStateChanged(WorldEntityState entity)
+    {
+        UpdateBlockerIndex(entity);
+    }
+
+    public bool IsBlocked(WorldTileCoord tile, EntityId? ignoreEntityId)
+    {
+        if (!_blockingEntitiesByTile.TryGetValue(tile, out var blockers))
+        {
+            return false;
+        }
+
+        foreach (var blocker in blockers)
+        {
+            if (blocker.Removed || blocker.Id == ignoreEntityId)
+            {
+                continue;
+            }
+
+            return true;
+        }
+
         return false;
     }
 
@@ -252,5 +333,105 @@ public sealed class LoadedWorldState
                 yield return new WorldTileCoord(origin.X + dx, origin.Y + dy);
             }
         }
+    }
+
+    private void IndexChunkEntities(ChunkRuntimeState chunk)
+    {
+        foreach (var entity in chunk.Entities)
+        {
+            IndexEntity(entity);
+        }
+    }
+
+    private void RemoveChunkEntitiesFromIndexes(ChunkRuntimeState chunk)
+    {
+        foreach (var entity in chunk.Entities.ToArray())
+        {
+            UnindexEntity(entity);
+        }
+    }
+
+    private void IndexEntity(WorldEntityState entity)
+    {
+        _loadedEntitiesById[entity.Id] = entity;
+        UpdateBlockerIndex(entity);
+    }
+
+    private void UnindexEntity(WorldEntityState entity)
+    {
+        _loadedEntitiesById.Remove(entity.Id);
+        RemoveBlockerIndex(entity);
+    }
+
+    private void UpdateBlockerIndex(WorldEntityState entity)
+    {
+        RemoveBlockerIndex(entity);
+        if (!ShouldIndexAsBlocker(entity))
+        {
+            return;
+        }
+
+        var tile = new WorldTileCoord(
+            (int)MathF.Floor(entity.Position.X / 32f),
+            (int)MathF.Floor(entity.Position.Y / 32f));
+        if (!_blockingEntitiesByTile.TryGetValue(tile, out var blockers))
+        {
+            blockers = [];
+            _blockingEntitiesByTile[tile] = blockers;
+        }
+
+        blockers.Add(entity);
+        _blockerTiles[entity] = tile;
+        BlockerVersion++;
+    }
+
+    private void RemoveBlockerIndex(WorldEntityState entity)
+    {
+        if (!_blockerTiles.Remove(entity, out var tile))
+        {
+            return;
+        }
+
+        if (_blockingEntitiesByTile.TryGetValue(tile, out var blockers))
+        {
+            blockers.Remove(entity);
+            if (blockers.Count == 0)
+            {
+                _blockingEntitiesByTile.Remove(tile);
+            }
+        }
+
+        BlockerVersion++;
+    }
+
+    private bool ShouldIndexAsBlocker(WorldEntityState entity)
+    {
+        if (entity.Removed)
+        {
+            return false;
+        }
+
+        return entity.Kind switch
+        {
+            WorldEntityKind.Placeable => GetPlaceableBlocksMovement(entity),
+            WorldEntityKind.ResourceNode => _content.ResourceNodes.Get(entity.DefinitionId).BlocksMovement,
+            _ => false
+        };
+    }
+
+    private bool GetPlaceableBlocksMovement(WorldEntityState entity)
+    {
+        var placeable = _content.Placeables.Get(entity.DefinitionId);
+        return entity.OpenState ? placeable.BlocksMovementWhenOpen : placeable.BlocksMovement;
+    }
+
+    private void IncrementChunkVisualVersion()
+    {
+        ChunkVisualVersion++;
+    }
+
+    private void IncrementEntityStructureVersion()
+    {
+        EntityStructureVersion++;
     }
 }

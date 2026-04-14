@@ -1,4 +1,3 @@
-using System.Numerics;
 using Downroot.Core.Input;
 
 namespace Downroot.Gameplay.Runtime.Systems;
@@ -20,7 +19,7 @@ public sealed class PlacementSystem(GameRuntime runtime, WorldRuntimeFacade worl
 
         var tileCoord = worldFacade.GetWorldTile(input.PointerWorld);
         var tile = worldFacade.GetWorldPosition(tileCoord);
-        if (worldQuery.EnumerateActiveEntities().Any(entity => !entity.Removed && Vector2.Distance(entity.Position, tile) < 8f))
+        if (worldQuery.HasAnyEntityNear(tile, 8f))
         {
             return;
         }
@@ -38,7 +37,6 @@ public sealed class PlacementSystem(GameRuntime runtime, WorldRuntimeFacade worl
             placeableDef.MaxDurability,
             runtime.ActiveWorldSpaceKind,
             tileCoord.ToChunkCoord(runtime.ChunkWidth, runtime.ChunkHeight)));
-        worldFacade.RefreshEntityProjection();
         slot.Remove(1);
     }
 }

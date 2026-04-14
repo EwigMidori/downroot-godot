@@ -98,7 +98,7 @@ public sealed class CraftingSystem(GameRuntime runtime, WorldQueryService worldQ
             return;
         }
 
-        var furnace = worldQuery.EnumerateActiveEntities().FirstOrDefault(entity => !entity.Removed && entity.Id == task.FurnaceEntityId);
+        var furnace = worldQuery.TryGetActiveEntity(task.FurnaceEntityId, out var activeFurnace) ? activeFurnace : null;
         if (furnace is null)
         {
             runtime.WorldState.ActiveFurnaceTask = null;

@@ -4,10 +4,8 @@ using Downroot.Core.World;
 
 namespace Downroot.Gameplay.Runtime.Systems;
 
-public sealed class MovementSystem(GameRuntime runtime, WorldRuntimeFacade worldFacade, WorldQueryService worldQuery)
+public sealed class MovementSystem(GameRuntime runtime, WorldRuntimeFacade worldFacade)
 {
-    private const float BlockingRadius = 18f;
-
     public void UpdatePlayerMovement(float deltaSeconds, Vector2 movement)
     {
         var direction = NormalizeMovement(movement);
@@ -58,25 +56,7 @@ public sealed class MovementSystem(GameRuntime runtime, WorldRuntimeFacade world
             }
         }
 
-        return worldQuery.EnumerateActiveEntities()
-            .Where(entity => !entity.Removed && entity.Id != ignoreEntityId)
-            .Any(entity =>
-            {
-                if (entity.Kind == WorldEntityKind.Placeable)
-                {
-                    var def = runtime.Content.Placeables.Get(entity.DefinitionId);
-                    var blocks = entity.OpenState ? def.BlocksMovementWhenOpen : def.BlocksMovement;
-                    return blocks && Vector2.Distance(entity.Position, position) < BlockingRadius;
-                }
-
-                if (entity.Kind == WorldEntityKind.ResourceNode)
-                {
-                    var def = runtime.Content.ResourceNodes.Get(entity.DefinitionId);
-                    return def.BlocksMovement && Vector2.Distance(entity.Position, position) < BlockingRadius;
-                }
-
-                return false;
-            });
+        return world.IsBlocked(tile, ignoreEntityId);
     }
 
     public Vector2 ClampToWorldBounds(Vector2 position)

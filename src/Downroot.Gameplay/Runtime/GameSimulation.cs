@@ -32,7 +32,7 @@ public sealed class GameSimulation
         _worldFacade = new WorldRuntimeFacade(runtime);
         _worldQuery = new WorldQueryService(runtime, _worldFacade);
         _worldStreamingSystem = new WorldStreamingSystem(runtime, _worldFacade);
-        _movementSystem = new MovementSystem(runtime, _worldFacade, _worldQuery);
+        _movementSystem = new MovementSystem(runtime, _worldFacade);
         _portalTravelSystem = new PortalTravelSystem(runtime, _worldFacade, _worldStreamingSystem, _movementSystem);
         _interactionSystem = new InteractionSystem(runtime, _worldFacade, _worldQuery, _portalTravelSystem);
         _placementSystem = new PlacementSystem(runtime, _worldFacade, _worldQuery, _movementSystem);
@@ -59,6 +59,7 @@ public sealed class GameSimulation
         }
 
         _worldStreamingSystem.UpdateLoadedChunks();
+        _worldFacade.EnsureEntityProjectionCurrent();
         _interactionSystem.ValidateActiveStation();
         _movementSystem.UpdatePlayerMovement(deltaSeconds, input.Movement);
         UpdateHotbarSelection(input);
@@ -66,17 +67,20 @@ public sealed class GameSimulation
         _interactionSystem.UpdateInteractionContext();
         HandleToggles(input);
         _interactionSystem.HandleInteract(input);
-        HandleAttack(input);
+        var selectedItemDef = GetSelectedItemDef();
+        var nearestCreature = _creatureSystem.GetNearestCreature(AttackRange);
+        HandleAttack(input, selectedItemDef, nearestCreature);
         HandleConsumption(input);
         _placementSystem.HandlePlacement(input);
         _destroySystem.HandleDestroy(
             deltaSeconds,
             input,
             _suppressDestroyUntilRelease,
-            GetSelectedItemDef()?.MeleeDamage is > 0 && _creatureSystem.GetNearestCreature(AttackRange) is not null,
-            GetSelectedItemDef());
+            selectedItemDef?.MeleeDamage is > 0 && nearestCreature is not null,
+            selectedItemDef);
         _creatureSystem.UpdateCreatures(deltaSeconds);
         _worldStreamingSystem.ReassignRuntimeEntities();
+        _worldFacade.EnsureEntityProjectionCurrent();
         _interactionSystem.UpdateInteractionContext();
         _runtime.WorldState.RemoveDeleted();
         _previousDestroyHeld = input.DestroyHeld;
@@ -217,7 +221,7 @@ public sealed class GameSimulation
         }
     }
 
-    private void HandleAttack(InputFrame input)
+    private void HandleAttack(InputFrame input, ItemDef? selectedItem, WorldEntityState? target)
     {
         var attackPressed = input.DestroyHeld && !_previousDestroyHeld;
         if (!attackPressed)
@@ -225,13 +229,11 @@ public sealed class GameSimulation
             return;
         }
 
-        var target = _creatureSystem.GetNearestCreature(AttackRange);
         if (target is null)
         {
             return;
         }
 
-        var selectedItem = GetSelectedItemDef();
         var damage = selectedItem?.MeleeDamage is > 0
             ? selectedItem.MeleeDamage
             : EmptyHandDamage;

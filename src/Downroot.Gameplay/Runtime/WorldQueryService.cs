@@ -1,59 +1,85 @@
 using System.Numerics;
 using Downroot.Core.Gameplay;
+using Downroot.Core.Ids;
 
 namespace Downroot.Gameplay.Runtime;
 
 public sealed class WorldQueryService(GameRuntime runtime, WorldRuntimeFacade worldFacade)
 {
-    public IEnumerable<WorldEntityState> EnumerateActiveEntities() => worldFacade.GetActiveWorld().EnumerateLoadedEntities();
+    public IReadOnlyList<WorldEntityState> EnumerateActiveEntities() => worldFacade.GetActiveProjection();
+
+    public bool TryGetActiveEntity(EntityId entityId, out WorldEntityState entity)
+    {
+        return worldFacade.TryGetActiveEntity(entityId, out entity);
+    }
 
     public WorldEntityState? GetNearestInteractable(float range)
     {
-        return EnumerateActiveEntities()
-            .Where(entity => !entity.Removed && IsInteractionEligible(entity))
-            .OrderBy(entity => Vector2.Distance(entity.Position, runtime.Player.Position))
-            .FirstOrDefault(entity => Vector2.Distance(entity.Position, runtime.Player.Position) <= range);
+        return FindNearest(range, IsInteractionEligible);
     }
 
     public WorldEntityState? GetNearestCreature(float range)
     {
-        return EnumerateActiveEntities()
-            .Where(entity => !entity.Removed && entity.Kind == WorldEntityKind.Creature)
-            .OrderBy(entity => Vector2.Distance(entity.Position, runtime.Player.Position))
-            .FirstOrDefault(entity => Vector2.Distance(entity.Position, runtime.Player.Position) <= range);
+        return FindNearest(range, static entity => entity.Kind == WorldEntityKind.Creature);
     }
 
     public WorldEntityState? GetNearestDestructibleEntity(float range)
     {
-        return EnumerateActiveEntities()
-            .Where(entity => !entity.Removed && IsDestructible(entity))
-            .OrderBy(entity => Vector2.Distance(entity.Position, runtime.Player.Position))
-            .FirstOrDefault(entity => Vector2.Distance(entity.Position, runtime.Player.Position) <= range);
+        return FindNearest(range, IsDestructible);
     }
 
     public WorldEntityState? FindNearbyStation(CraftingStationKind stationKind, float range)
     {
-        return EnumerateActiveEntities()
-            .Where(entity => !entity.Removed && entity.Kind == WorldEntityKind.Placeable)
-            .OrderBy(entity => Vector2.Distance(entity.Position, runtime.Player.Position))
-            .FirstOrDefault(entity =>
-            {
-                if (Vector2.Distance(entity.Position, runtime.Player.Position) > range)
-                {
-                    return false;
-                }
-
-                return runtime.Content.Placeables.Get(entity.DefinitionId).CraftingStationKind == stationKind;
-            });
+        return FindNearest(range, entity =>
+        {
+            return entity.Kind == WorldEntityKind.Placeable
+                && runtime.Content.Placeables.Get(entity.DefinitionId).CraftingStationKind == stationKind;
+        });
     }
 
-    public IReadOnlyList<WorldEntityState> GetActiveEntities()
+    public bool HasAnyEntityNear(Vector2 position, float radius)
     {
-        return EnumerateActiveEntities()
-            .Where(entity => !entity.Removed)
-            .OrderBy(entity => entity.Position.Y)
-            .ThenBy(entity => entity.Position.X)
-            .ToArray();
+        var radiusSquared = radius * radius;
+        foreach (var entity in EnumerateActiveEntities())
+        {
+            if (entity.Removed)
+            {
+                continue;
+            }
+
+            if (Vector2.DistanceSquared(entity.Position, position) < radiusSquared)
+            {
+                return true;
+            }
+        }
+
+        return false;
+    }
+
+    public IReadOnlyList<WorldEntityState> GetActiveEntities() => EnumerateActiveEntities();
+
+    private WorldEntityState? FindNearest(float range, Func<WorldEntityState, bool> predicate)
+    {
+        var bestDistanceSquared = range * range;
+        WorldEntityState? best = null;
+        foreach (var entity in EnumerateActiveEntities())
+        {
+            if (entity.Removed || !predicate(entity))
+            {
+                continue;
+            }
+
+            var distanceSquared = Vector2.DistanceSquared(entity.Position, runtime.Player.Position);
+            if (distanceSquared > bestDistanceSquared)
+            {
+                continue;
+            }
+
+            bestDistanceSquared = distanceSquared;
+            best = entity;
+        }
+
+        return best;
     }
 
     private bool IsInteractionEligible(WorldEntityState entity)

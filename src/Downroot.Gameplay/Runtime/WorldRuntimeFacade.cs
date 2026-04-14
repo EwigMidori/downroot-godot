@@ -7,6 +7,12 @@ namespace Downroot.Gameplay.Runtime;
 
 public sealed class WorldRuntimeFacade(GameRuntime runtime)
 {
+    public IReadOnlyList<WorldEntityState> GetActiveProjection()
+    {
+        runtime.WorldState.EnsureEntityProjectionCurrent();
+        return runtime.WorldState.Entities;
+    }
+
     public LoadedWorldState GetActiveWorld() => runtime.WorldState.GetActiveWorld();
 
     public LoadedWorldState GetWorld(WorldSpaceKind worldSpaceKind) => runtime.GetWorld(worldSpaceKind);
@@ -47,16 +53,35 @@ public sealed class WorldRuntimeFacade(GameRuntime runtime)
     public void AddRuntimeEntity(WorldSpaceKind worldSpaceKind, WorldEntityState entity)
     {
         GetWorld(worldSpaceKind).AddRuntimeEntity(entity);
+        if (worldSpaceKind == runtime.ActiveWorldSpaceKind)
+        {
+            runtime.WorldState.MarkEntityProjectionDirty();
+        }
     }
 
-    public void RefreshEntityProjection()
+    public bool EnsureEntityProjectionCurrent()
     {
-        runtime.WorldState.RefreshEntityProjection();
+        return runtime.WorldState.EnsureEntityProjectionCurrent();
     }
 
-    public void RemoveDeleted()
+    public bool RemoveDeleted()
     {
-        runtime.WorldState.RemoveDeleted();
+        return runtime.WorldState.RemoveDeleted();
+    }
+
+    public void MarkEntityProjectionDirty()
+    {
+        runtime.WorldState.MarkEntityProjectionDirty();
+    }
+
+    public bool TryGetActiveEntity(EntityId entityId, out WorldEntityState entity)
+    {
+        return GetActiveWorld().TryGetEntity(entityId, out entity);
+    }
+
+    public void NotifyEntityStateChanged(WorldEntityState entity)
+    {
+        GetWorld(entity.WorldSpaceKind).NotifyEntityStateChanged(entity);
     }
 
     public ContentId? GetPortalDefinitionId(WorldSpaceKind worldSpaceKind)

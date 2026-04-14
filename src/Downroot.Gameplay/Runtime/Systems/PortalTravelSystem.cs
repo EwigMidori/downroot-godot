@@ -99,7 +99,7 @@ public sealed class PortalTravelSystem(
         runtime.WorldState.ActiveStationKind = null;
         worldStreamingSystem.UpdateLoadedChunksForWorld(activeWorld, runtime.WorldState.Travel.TargetPortalTile);
         runtime.Player.Position = FindPortalLandingPosition(activeWorld, runtime.WorldState.Travel.TargetPortalTile);
-        worldFacade.RefreshEntityProjection();
+        worldFacade.EnsureEntityProjectionCurrent();
         runtime.WorldState.SetStatusEvent(
             runtime.ActiveWorldSpaceKind == WorldSpaceKind.Overworld
                 ? new StatusEventState(StatusEventKind.ReturnedThroughPortal)

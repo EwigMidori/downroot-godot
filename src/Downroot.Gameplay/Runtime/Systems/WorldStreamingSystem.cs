@@ -5,11 +5,53 @@ namespace Downroot.Gameplay.Runtime.Systems;
 
 public sealed class WorldStreamingSystem(GameRuntime runtime, WorldRuntimeFacade worldFacade)
 {
-    public void UpdateLoadedChunks()
+    public bool UpdateLoadedChunks()
     {
         var world = worldFacade.GetActiveWorld();
         var centerChunk = worldFacade.GetChunkCoord(runtime.Player.Position);
+        return UpdateLoadedChunksForWorldCore(world, centerChunk);
+    }
+
+    public bool UpdateLoadedChunksForWorld(LoadedWorldState world, WorldTileCoord aroundTile)
+    {
+        return UpdateLoadedChunksForWorldCore(world, aroundTile.ToChunkCoord(runtime.ChunkWidth, runtime.ChunkHeight));
+    }
+
+    public bool ReassignRuntimeEntities()
+    {
+        var world = worldFacade.GetActiveWorld();
+        var moved = false;
+        foreach (var sourceChunk in world.LoadedChunks.Values.ToArray())
+        {
+            foreach (var entity in sourceChunk.RuntimeEntities.Values.Where(entity => !entity.Removed).ToArray())
+            {
+                var targetChunk = worldFacade.GetChunkCoord(entity.Position);
+                if (targetChunk == entity.ChunkCoord || !world.ContainsChunk(targetChunk) || !world.LoadedChunks.ContainsKey(targetChunk))
+                {
+                    continue;
+                }
+
+                if (!world.MoveRuntimeEntity(entity.Id, targetChunk))
+                {
+                    continue;
+                }
+
+                moved = true;
+            }
+        }
+
+        if (moved)
+        {
+            worldFacade.MarkEntityProjectionDirty();
+        }
+
+        return moved;
+    }
+
+    private bool UpdateLoadedChunksForWorldCore(LoadedWorldState world, ChunkCoord centerChunk)
+    {
         var desired = new HashSet<ChunkCoord>();
+        var changed = false;
 
         for (var y = centerChunk.Y - world.LoadRadius; y <= centerChunk.Y + world.LoadRadius; y++)
         {
@@ -30,50 +72,21 @@ public sealed class WorldStreamingSystem(GameRuntime runtime, WorldRuntimeFacade
                 var generated = worldFacade.GetGenerator(world.WorldSpaceKind)
                     .GenerateChunk(world.WorldSpaceKind, world.WorldSeed, coord, runtime.ChunkWidth, runtime.ChunkHeight);
                 world.LoadChunk(generated, chunk => GameBootstrapper.CreateChunkRuntimeState(runtime, chunk));
+                changed = true;
             }
         }
 
         foreach (var staleChunk in world.LoadedChunks.Keys.Where(coord => !desired.Contains(coord)).ToArray())
         {
             world.UnloadChunk(staleChunk);
+            changed = true;
         }
 
-        worldFacade.RefreshEntityProjection();
-    }
-
-    public void UpdateLoadedChunksForWorld(LoadedWorldState world, WorldTileCoord aroundTile)
-    {
-        var currentWorld = runtime.ActiveWorldSpaceKind;
-        var savedPosition = runtime.Player.Position;
-        runtime.ActiveWorldSpaceKind = world.WorldSpaceKind;
-        runtime.Player.Position = worldFacade.GetWorldPosition(aroundTile);
-        UpdateLoadedChunks();
-        runtime.Player.Position = savedPosition;
-        runtime.ActiveWorldSpaceKind = currentWorld;
-        worldFacade.RefreshEntityProjection();
-    }
-
-    public void ReassignRuntimeEntities()
-    {
-        var world = worldFacade.GetActiveWorld();
-        foreach (var sourceChunk in world.LoadedChunks.Values.ToArray())
+        if (changed && world.WorldSpaceKind == runtime.ActiveWorldSpaceKind)
         {
-            foreach (var entity in sourceChunk.RuntimeEntities.Values.Where(entity => !entity.Removed).ToArray())
-            {
-                var targetChunk = worldFacade.GetChunkCoord(entity.Position);
-                if (targetChunk == entity.ChunkCoord || !world.ContainsChunk(targetChunk) || !world.LoadedChunks.ContainsKey(targetChunk))
-                {
-                    continue;
-                }
-
-                if (!sourceChunk.TakeRuntimeEntity(entity.Id, out _))
-                {
-                    continue;
-                }
-
-                entity.ChunkCoord = targetChunk;
-                world.LoadedChunks[targetChunk].AddRuntimeEntity(entity);
-            }
+            worldFacade.MarkEntityProjectionDirty();
         }
+
+        return changed;
     }
 }

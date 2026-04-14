@@ -36,8 +36,8 @@ public sealed class GameBootstrapper
         var worldState = new WorldState
         {
             ActiveWorldSpaceKind = WorldSpaceKind.Overworld,
-            Overworld = new LoadedWorldState(overworldModel, bootstrapConfig.OverworldLoadRadius),
-            DimShardPocket = new LoadedWorldState(dimShardModel, bootstrapConfig.OverworldLoadRadius)
+            Overworld = new LoadedWorldState(registries, overworldModel, bootstrapConfig.OverworldLoadRadius),
+            DimShardPocket = new LoadedWorldState(registries, dimShardModel, bootstrapConfig.OverworldLoadRadius)
         };
 
         var player = new PlayerState(

@@ -143,6 +143,7 @@ public sealed class DestroySystem(GameRuntime runtime, WorldRuntimeFacade worldF
         }
 
         entity.Removed = true;
+        worldFacade.NotifyEntityStateChanged(entity);
 
         switch (entity.Kind)
         {

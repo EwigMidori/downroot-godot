@@ -19,7 +19,7 @@ public sealed class GamePresentationBuilder
             BuildDestroyProgress(runtime));
     }
 
-    private static HudStatusViewData BuildHudStatus(GameRuntime runtime)
+    public HudStatusViewData BuildHudStatus(GameRuntime runtime)
     {
         var isNight = runtime.WorldState.IsNight(runtime.BootstrapConfig.DayLengthSeconds);
         return new HudStatusViewData(
@@ -30,7 +30,7 @@ public sealed class GamePresentationBuilder
             Math.Clamp(runtime.WorldState.PlayerHitFlashSeconds / 0.18f, 0f, 1f) * 0.45f);
     }
 
-    private static IReadOnlyList<HotbarSlotViewData> BuildHotbar(GameRuntime runtime)
+    public IReadOnlyList<HotbarSlotViewData> BuildHotbar(GameRuntime runtime)
     {
         return runtime.Player.Inventory.Slots
             .Take(runtime.Player.HotbarSize)
@@ -38,7 +38,7 @@ public sealed class GamePresentationBuilder
             .ToArray();
     }
 
-    private static CraftingPanelViewData BuildCraftingPanel(GameRuntime runtime, GameSimulation simulation)
+    public CraftingPanelViewData BuildCraftingPanel(GameRuntime runtime, GameSimulation simulation)
     {
         var mode = runtime.WorldState.WorkspaceMode;
         return new CraftingPanelViewData(
@@ -62,7 +62,7 @@ public sealed class GamePresentationBuilder
                 .ToArray());
     }
 
-    private static IReadOnlyList<CraftRecipeViewData> BuildRecipeRows(GameRuntime runtime, GameSimulation simulation, CraftWorkspaceMode mode)
+    public IReadOnlyList<CraftRecipeViewData> BuildRecipeRows(GameRuntime runtime, GameSimulation simulation, CraftWorkspaceMode mode)
     {
         var activeTask = runtime.WorldState.ActiveFurnaceTask;
         return simulation.GetRecipesForWorkspace(mode)
@@ -103,7 +103,7 @@ public sealed class GamePresentationBuilder
             .ToArray();
     }
 
-    private static InteractionPromptViewData BuildInteractionPrompt(GameRuntime runtime)
+    public InteractionPromptViewData BuildInteractionPrompt(GameRuntime runtime)
     {
         var context = runtime.WorldState.CurrentInteraction;
         if (context is null)
@@ -135,7 +135,7 @@ public sealed class GamePresentationBuilder
             ResolveTargetName(runtime.Content, context.EntityKind, context.ContentId));
     }
 
-    private static StatusBannerViewData BuildStatusBanner(GameRuntime runtime)
+    public StatusBannerViewData BuildStatusBanner(GameRuntime runtime)
     {
         if (runtime.WorldState.ActiveStatusEvent is null)
         {
@@ -157,7 +157,7 @@ public sealed class GamePresentationBuilder
         };
     }
 
-    private static DestroyProgressViewData BuildDestroyProgress(GameRuntime runtime)
+    public DestroyProgressViewData BuildDestroyProgress(GameRuntime runtime)
     {
         return runtime.WorldState.ActiveDestroyProgress switch
         {

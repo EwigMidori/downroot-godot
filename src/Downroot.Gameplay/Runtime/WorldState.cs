@@ -8,10 +8,25 @@ public sealed class WorldState
 {
     private readonly List<WorldEntityState> _entities = [];
     private readonly EntityProjectionBuilder _projectionBuilder = new();
+    private WorldSpaceKind _activeWorldSpaceKind = WorldSpaceKind.Overworld;
 
     // Active-world convenience projection for renderer, UI, and query services.
     public IReadOnlyList<WorldEntityState> Entities => _entities;
-    public WorldSpaceKind ActiveWorldSpaceKind { get; set; } = WorldSpaceKind.Overworld;
+    public WorldSpaceKind ActiveWorldSpaceKind
+    {
+        get => _activeWorldSpaceKind;
+        set
+        {
+            if (_activeWorldSpaceKind == value)
+            {
+                return;
+            }
+
+            _activeWorldSpaceKind = value;
+            MarkEntityProjectionDirty();
+        }
+    }
+
     public required LoadedWorldState Overworld { get; init; }
     public required LoadedWorldState DimShardPocket { get; init; }
     public WorldTravelState Travel { get; } = new();
@@ -26,6 +41,8 @@ public sealed class WorldState
     public DestroyProgressState? ActiveDestroyProgress { get; set; }
     public FurnaceTaskState? ActiveFurnaceTask { get; set; }
     public float PlayerHitFlashSeconds { get; set; }
+    public long EntityProjectionVersion { get; private set; }
+    public bool IsEntityProjectionDirty { get; private set; } = true;
 
     public bool IsNight(float dayLengthSeconds) => TimeOfDaySeconds >= dayLengthSeconds * 0.5f;
 
@@ -38,13 +55,31 @@ public sealed class WorldState
 
     public void RefreshEntityProjection()
     {
-        RebuildEntityProjection(_projectionBuilder);
+        EnsureEntityProjectionCurrent();
     }
 
     public void RebuildEntityProjection(EntityProjectionBuilder builder)
     {
         _entities.Clear();
         _entities.AddRange(builder.Build(GetActiveWorld()));
+        IsEntityProjectionDirty = false;
+        EntityProjectionVersion++;
+    }
+
+    public void MarkEntityProjectionDirty()
+    {
+        IsEntityProjectionDirty = true;
+    }
+
+    public bool EnsureEntityProjectionCurrent()
+    {
+        if (!IsEntityProjectionDirty)
+        {
+            return false;
+        }
+
+        RebuildEntityProjection(_projectionBuilder);
+        return true;
     }
 
     public void SetStatusEvent(StatusEventState statusEvent, float seconds = 2f)
@@ -73,24 +108,31 @@ public sealed class WorldState
         }
     }
 
-    public void RemoveDeleted()
+    public bool RemoveDeleted()
     {
+        var deleted = false;
         foreach (var world in new[] { Overworld, DimShardPocket })
         {
             foreach (var chunk in world.LoadedChunks.Values)
             {
                 foreach (var removedNatural in chunk.NaturalEntities.Values.Where(entity => entity.Removed).ToArray())
                 {
-                    chunk.RemoveEntity(removedNatural);
+                    deleted |= world.RemoveEntity(removedNatural);
                 }
 
                 foreach (var removedRuntime in chunk.RuntimeEntities.Values.Where(entity => entity.Removed).ToArray())
                 {
-                    chunk.RemoveEntity(removedRuntime);
+                    deleted |= world.RemoveEntity(removedRuntime);
                 }
             }
         }
 
-        RefreshEntityProjection();
+        if (deleted)
+        {
+            MarkEntityProjectionDirty();
+            EnsureEntityProjectionCurrent();
+        }
+
+        return deleted;
     }
 }
