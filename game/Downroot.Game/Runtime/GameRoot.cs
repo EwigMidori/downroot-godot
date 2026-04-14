@@ -10,6 +10,7 @@ namespace Downroot.Game.Runtime;
 
 public partial class GameRoot : Node2D
 {
+    private const bool EnableRuntimeProfiler = false;
     private GameRuntime? _runtime;
     private GameSimulation? _simulation;
     private IInputService? _inputService;
@@ -53,6 +54,7 @@ public partial class GameRoot : Node2D
             GameInputMapInstaller.Install();
 
             _startupOverlay.UpdateStatus("Bootstrapping runtime");
+            RuntimeProfiler.Enabled = EnableRuntimeProfiler;
             RuntimeProfiler.Configure(message => GD.Print(message), frameWindow: 60);
             if (_runtime is null)
             {

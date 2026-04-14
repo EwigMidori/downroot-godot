@@ -8,6 +8,7 @@ namespace Downroot.Game.Runtime;
 
 public partial class AppRoot : Control
 {
+    private const bool EnablePauseInputLogging = false;
     private SavePathResolver? _paths;
     private JsonFileStore? _store;
     private SaveGameRepository? _saves;
@@ -61,20 +62,24 @@ public partial class AppRoot : Control
         ShowMainMenu();
     }
 
-    public override void _UnhandledInput(InputEvent @event)
+    public override void _Input(InputEvent @event)
     {
         if (@event is not InputEventKey { Pressed: true, Echo: false, Keycode: Key.Escape })
         {
             return;
         }
 
+        LogPauseInput($"Esc received paused={GetTree().Paused} pageVisible={_pageHost?.Visible} pauseMenu={_pauseMenuActive} page={_currentPage?.Name ?? "<none>"}");
+
         if (_session?.GameRoot is null)
         {
+            LogPauseInput("Esc ignored because no active session exists.");
             return;
         }
 
         if (!_pageHost!.Visible)
         {
+            LogPauseInput("Esc opening pause menu.");
             ShowPauseMenu();
             GetViewport().SetInputAsHandled();
             return;
@@ -82,6 +87,7 @@ public partial class AppRoot : Control
 
         if (_pauseMenuActive && ReferenceEquals(_currentPage, _mainMenu?.View))
         {
+            LogPauseInput("Esc resuming from pause menu.");
             ResumeSession();
             GetViewport().SetInputAsHandled();
             return;
@@ -89,6 +95,7 @@ public partial class AppRoot : Control
 
         if (_pauseMenuActive)
         {
+            LogPauseInput("Esc returning to pause root page.");
             ShowPauseMenu();
             GetViewport().SetInputAsHandled();
         }
@@ -113,9 +120,11 @@ public partial class AppRoot : Control
     {
         if (_session?.GameRoot is null)
         {
+            LogPauseInput("ShowPauseMenu skipped because session is missing.");
             return;
         }
 
+        LogPauseInput("ShowPauseMenu applying paused state.");
         GetTree().Paused = true;
         _pauseMenuActive = true;
         _pageHost!.Visible = true;
@@ -125,6 +134,7 @@ public partial class AppRoot : Control
 
     private void ResumeSession()
     {
+        LogPauseInput("ResumeSession clearing paused state.");
         _pauseMenuActive = false;
         _pageHost!.Visible = false;
         GetTree().Paused = false;
@@ -351,5 +361,15 @@ public partial class AppRoot : Control
 
             return hash;
         }
+    }
+
+    private static void LogPauseInput(string message)
+    {
+        if (!EnablePauseInputLogging)
+        {
+            return;
+        }
+
+        GD.Print($"[PauseInput] {message}");
     }
 }

@@ -37,7 +37,7 @@ public static class RuntimeProfiler
     private static long _frameMaxTicks;
     private static long _frameStartTimestamp;
 
-    public static bool Enabled { get; set; } = true;
+    public static bool Enabled { get; set; } = false;
 
     public static void Configure(Action<string>? logger = null, int frameWindow = 60)
     {
