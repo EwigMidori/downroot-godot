@@ -1,5 +1,6 @@
 using Downroot.Core.Save;
 using Downroot.Gameplay.Runtime;
+using Downroot.Core.Ids;
 
 namespace Downroot.Gameplay.Persistence;
 
@@ -27,6 +28,7 @@ public sealed class GameSaveSnapshotBuilder
                 Hunger = runtime.Player.Survival.Hunger,
                 MaxHunger = runtime.Player.Survival.MaxHunger,
                 SelectedHotbarIndex = runtime.Player.SelectedHotbarIndex,
+                PrimaryBedEntityGuid = runtime.PrimaryBedEntityId?.Value.ToString("N"),
                 InventorySlots = _inventoryAdapter.Export(runtime.Player.Inventory)
             },
             TimeOfDaySeconds = runtime.WorldState.TimeOfDaySeconds,

@@ -41,7 +41,16 @@ public sealed class WorldEntityState
     public string? StableNaturalEntityId { get; }
     public int StackCount { get; set; }
     public bool Removed { get; set; }
-    public bool OpenState { get; set; }
+    public PlaceableRuntimeState? PlaceableState { get; set; }
+    public bool OpenState
+    {
+        get => PlaceableState?.IsOpen ?? false;
+        set
+        {
+            PlaceableState ??= new PlaceableRuntimeState();
+            PlaceableState.IsOpen = value;
+        }
+    }
     public float DamageAccumulator { get; set; }
     public float AiAccumulator { get; set; }
     public float HitFlashSeconds { get; set; }
@@ -62,11 +71,11 @@ public sealed class WorldEntityState
             Id)
         {
             Removed = Removed,
-            OpenState = OpenState,
             DamageAccumulator = DamageAccumulator,
             AiAccumulator = AiAccumulator,
             HitFlashSeconds = HitFlashSeconds,
-            StorageInventory = StorageInventory?.Clone()
+            StorageInventory = StorageInventory?.Clone(),
+            PlaceableState = PlaceableState?.Clone()
         };
     }
 }

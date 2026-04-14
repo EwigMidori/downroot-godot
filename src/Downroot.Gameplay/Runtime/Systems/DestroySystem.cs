@@ -147,6 +147,11 @@ public sealed class DestroySystem(GameRuntime runtime, WorldRuntimeFacade worldF
             runtime.WorldState.ActiveStorageEntityId = null;
         }
 
+        if (runtime.PrimaryBedEntityId == entity.Id)
+        {
+            runtime.PrimaryBedEntityId = null;
+        }
+
         entity.Removed = true;
         worldFacade.NotifyEntityStateChanged(entity);
 

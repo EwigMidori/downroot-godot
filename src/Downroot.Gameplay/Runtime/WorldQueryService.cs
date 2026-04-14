@@ -33,6 +33,7 @@ public sealed class WorldQueryService(GameRuntime runtime, WorldRuntimeFacade wo
         return FindNearest(range, entity =>
         {
             return entity.Kind == WorldEntityKind.Placeable
+                && runtime.Content.Placeables.Get(entity.DefinitionId).HasBehavior(Downroot.Core.Definitions.PlaceableBehaviorKind.CraftingStation)
                 && runtime.Content.Placeables.Get(entity.DefinitionId).CraftingStationKind == stationKind;
         });
     }

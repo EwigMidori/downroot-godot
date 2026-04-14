@@ -1,4 +1,5 @@
 using System.Numerics;
+using Downroot.Core.Definitions;
 using Downroot.Core.Ids;
 using Downroot.Core.World;
 using Downroot.World.Generation;
@@ -82,6 +83,10 @@ public sealed class WorldRuntimeFacade(GameRuntime runtime)
     public void NotifyEntityStateChanged(WorldEntityState entity)
     {
         GetWorld(entity.WorldSpaceKind).NotifyEntityStateChanged(entity);
+        if (entity.WorldSpaceKind == runtime.ActiveWorldSpaceKind)
+        {
+            runtime.WorldState.NotifyEntityStateChanged();
+        }
     }
 
     public ContentId? GetPortalDefinitionId(WorldSpaceKind worldSpaceKind)
@@ -111,5 +116,17 @@ public sealed class WorldRuntimeFacade(GameRuntime runtime)
             && runtime.Content.PortalWorldLinks.Any(link =>
                 (link.SourceWorldSpaceKind == entity.WorldSpaceKind && link.SourcePortalChunk == entity.ChunkCoord)
                 || (link.TargetWorldSpaceKind == entity.WorldSpaceKind && link.TargetPortalChunk == entity.ChunkCoord));
+    }
+
+    public bool TryGetPlaceableDef(WorldEntityState entity, out PlaceableDef placeableDef)
+    {
+        if (entity.Kind == WorldEntityKind.Placeable && runtime.Content.Placeables.TryGet(entity.DefinitionId, out var def))
+        {
+            placeableDef = def!;
+            return true;
+        }
+
+        placeableDef = null!;
+        return false;
     }
 }

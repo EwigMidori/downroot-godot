@@ -129,6 +129,10 @@ public sealed class GamePresentationBuilder
             "F",
             context.Verb switch
             {
+                InteractionVerb.Sleep => PromptIconKind.Use,
+                InteractionVerb.SetHome => PromptIconKind.Use,
+                InteractionVerb.Light => PromptIconKind.Use,
+                InteractionVerb.Extinguish => PromptIconKind.Use,
                 InteractionVerb.Open => PromptIconKind.Open,
                 InteractionVerb.Close => PromptIconKind.Close,
                 InteractionVerb.Gather => PromptIconKind.Gather,
@@ -138,6 +142,10 @@ public sealed class GamePresentationBuilder
             },
             context.Verb switch
             {
+                InteractionVerb.Sleep => "Sleep",
+                InteractionVerb.SetHome => "Set Home",
+                InteractionVerb.Light => "Light",
+                InteractionVerb.Extinguish => "Extinguish",
                 InteractionVerb.Open => "Open",
                 InteractionVerb.Close => "Close",
                 InteractionVerb.Gather => "Gather",
@@ -166,6 +174,11 @@ public sealed class GamePresentationBuilder
             { Kind: StatusEventKind.InventoryFull } => new StatusBannerViewData(true, "Inventory full"),
             { Kind: StatusEventKind.EnteredPortal } => new StatusBannerViewData(true, "Entering Portal"),
             { Kind: StatusEventKind.ReturnedThroughPortal } => new StatusBannerViewData(true, "Returned to Overworld"),
+            { Kind: StatusEventKind.HomeSet } => new StatusBannerViewData(true, "Home bed updated"),
+            { Kind: StatusEventKind.SleptUntilMorning } => new StatusBannerViewData(true, "Slept until morning"),
+            { Kind: StatusEventKind.LightLit } => new StatusBannerViewData(true, "Light source lit"),
+            { Kind: StatusEventKind.LightExtinguished } => new StatusBannerViewData(true, "Light source extinguished"),
+            { Kind: StatusEventKind.LightBurnedOut } => new StatusBannerViewData(true, "This torch has burned out"),
             _ => new StatusBannerViewData(true, "Craft failed")
         };
     }

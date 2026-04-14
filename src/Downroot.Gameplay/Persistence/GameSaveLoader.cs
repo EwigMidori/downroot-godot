@@ -3,6 +3,7 @@ using Downroot.Core.Save;
 using Downroot.Core.World;
 using Downroot.Gameplay.Runtime;
 using Downroot.Gameplay.Runtime.Systems;
+using Downroot.Core.Ids;
 
 namespace Downroot.Gameplay.Persistence;
 
@@ -16,6 +17,9 @@ public sealed class GameSaveLoader
         runtime.Player.Position = new Vector2(save.Player.PositionX, save.Player.PositionY);
         runtime.Player.Facing = new Vector2(save.Player.FacingX, save.Player.FacingY);
         runtime.Player.SelectedHotbarIndex = save.Player.SelectedHotbarIndex;
+        runtime.PrimaryBedEntityId = !string.IsNullOrWhiteSpace(save.Player.PrimaryBedEntityGuid) && Guid.TryParse(save.Player.PrimaryBedEntityGuid, out var bedGuid)
+            ? new EntityId(bedGuid)
+            : null;
         runtime.Player.Survival.SetHealth(save.Player.Health);
         runtime.Player.Survival.SetHunger(save.Player.Hunger);
         _inventoryAdapter.Import(runtime.Player.Inventory, save.Player.InventorySlots);
@@ -39,6 +43,24 @@ public sealed class GameSaveLoader
         runtime.ActiveWorldSpaceKind = Enum.Parse<WorldSpaceKind>(save.ActiveWorldSpaceKind, ignoreCase: true);
         var streamer = new WorldStreamingSystem(runtime, new WorldRuntimeFacade(runtime));
         streamer.UpdateLoadedChunks();
+        if (runtime.PrimaryBedEntityId is { } primaryBedId)
+        {
+            var primaryBedExists = save.Worlds
+                .SelectMany(world => world.Chunks)
+                .SelectMany(chunk => chunk.RuntimeEntities)
+                .Any(entity => string.Equals(entity.EntityGuid, primaryBedId.Value.ToString("N"), StringComparison.OrdinalIgnoreCase));
+            if (!primaryBedExists)
+            {
+                runtime.PrimaryBedEntityId = null;
+            }
+        }
+
+        if (runtime.PrimaryBedEntityId is { } restoredBedId
+            && runtime.WorldState.GetActiveWorld().TryGetEntity(restoredBedId, out var restoredBed))
+        {
+            restoredBed.PlaceableState ??= new PlaceableRuntimeState();
+            restoredBed.PlaceableState.AssignedAsPrimaryBed = true;
+        }
         runtime.WorldState.MarkEntityProjectionDirty();
         runtime.WorldState.RefreshEntityProjection();
     }

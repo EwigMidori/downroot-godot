@@ -38,6 +38,7 @@ public sealed class PlacementSystem(GameRuntime runtime, WorldRuntimeFacade worl
             runtime.ActiveWorldSpaceKind,
             tileCoord.ToChunkCoord(runtime.ChunkWidth, runtime.ChunkHeight))
         {
+            PlaceableState = PlaceableRuntimeStateFactory.Create(runtime, placeableDef),
             StorageInventory = placeableDef.StorageSlotCount > 0
                 ? new InventoryState(placeableDef.StorageSlotCount)
                 : null

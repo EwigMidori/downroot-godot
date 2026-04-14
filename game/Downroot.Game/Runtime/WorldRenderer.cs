@@ -505,7 +505,7 @@ public sealed partial class WorldRenderer : Node2D
             texture,
             ToGodot(entity.Position),
             entity.Kind == WorldEntityKind.Creature && entity.Position.X > runtime.Player.Position.X,
-            entity.HitFlashSeconds > 0f ? new Color(1f, 0.65f, 0.65f, 1f) : Colors.White,
+            ResolveEntityModulate(entity),
             ResolveZIndex(entity),
             entity.OpenState);
     }
@@ -641,6 +641,24 @@ public sealed partial class WorldRenderer : Node2D
     private Texture2D ResolveCreatureTexture(CreatureDef creatureDef)
     {
         return ResolveCachedTexture($"creature:{creatureDef.Id.Value}", () => _textureLoader.LoadCreature(creatureDef).Texture);
+    }
+
+    private Color ResolveEntityModulate(WorldEntityState entity)
+    {
+        if (entity.HitFlashSeconds > 0f)
+        {
+            return new Color(1f, 0.65f, 0.65f, 1f);
+        }
+
+        if (entity.Kind == WorldEntityKind.Placeable
+            && _runtime!.Content.Placeables.TryGet(entity.DefinitionId, out var placeableDef)
+            && placeableDef!.HasBehavior(PlaceableBehaviorKind.LightSource)
+            && entity.PlaceableState?.IsLit == false)
+        {
+            return new Color(0.72f, 0.72f, 0.72f, 0.9f);
+        }
+
+        return Colors.White;
     }
 
     private Texture2D ResolveCachedTexture(string key, Func<Texture2D> factory)

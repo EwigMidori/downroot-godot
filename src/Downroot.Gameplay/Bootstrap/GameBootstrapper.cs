@@ -140,7 +140,10 @@ public sealed class GameBootstrapper
                     generatedChunk.WorldSpaceKind,
                     generatedChunk.Coord,
                     true,
-                    CreateNaturalEntityId(generatedChunk.WorldSpaceKind, generatedChunk.Coord, spawn.Tile, placeableDef.Id)));
+                    CreateNaturalEntityId(generatedChunk.WorldSpaceKind, generatedChunk.Coord, spawn.Tile, placeableDef.Id))
+                {
+                    PlaceableState = PlaceableRuntimeStateFactory.Create(runtime, placeableDef)
+                });
             }
         }
 
@@ -210,7 +213,10 @@ public sealed class GameBootstrapper
             runtime.GetWorldPosition(tile),
             placeableDef.MaxDurability,
             WorldSpaceKind.Overworld,
-            chunkCoord));
+            chunkCoord)
+        {
+            PlaceableState = PlaceableRuntimeStateFactory.Create(runtime, placeableDef)
+        });
     }
 
     private static void LogLoadedWorld(LoadedWorldState world)

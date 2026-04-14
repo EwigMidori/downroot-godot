@@ -17,5 +17,9 @@ public sealed class SavedRuntimeEntityData
     public int StackCount { get; set; }
     public bool Removed { get; set; }
     public bool OpenState { get; set; }
+    public bool IsLit { get; set; }
+    public float FuelSecondsRemaining { get; set; }
+    public bool AssignedAsPrimaryBed { get; set; }
+    public float FuelLastUpdatedTotalSeconds { get; set; }
     public IReadOnlyList<SavedInventorySlotData>? StorageInventorySlots { get; set; }
 }

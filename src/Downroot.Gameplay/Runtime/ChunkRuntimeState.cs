@@ -139,6 +139,10 @@ public sealed class ChunkRuntimeState
             StackCount = entity.StackCount,
             Removed = entity.Removed,
             OpenState = entity.OpenState,
+            IsLit = entity.PlaceableState?.IsLit ?? false,
+            FuelSecondsRemaining = entity.PlaceableState?.FuelSecondsRemaining ?? 0f,
+            AssignedAsPrimaryBed = entity.PlaceableState?.AssignedAsPrimaryBed ?? false,
+            FuelLastUpdatedTotalSeconds = entity.PlaceableState?.FuelLastUpdatedTotalSeconds ?? 0f,
             StorageInventorySlots = entity.StorageInventory?.Slots
                 .Select((slot, index) => new SavedInventorySlotData
                 {
@@ -170,6 +174,21 @@ public sealed class ChunkRuntimeState
             Removed = savedEntity.Removed,
             OpenState = savedEntity.OpenState
         };
+        if (savedEntity.OpenState
+            || savedEntity.IsLit
+            || savedEntity.FuelSecondsRemaining > 0f
+            || savedEntity.AssignedAsPrimaryBed
+            || savedEntity.FuelLastUpdatedTotalSeconds > 0f)
+        {
+            entity.PlaceableState = new PlaceableRuntimeState
+            {
+                IsOpen = savedEntity.OpenState,
+                IsLit = savedEntity.IsLit,
+                FuelSecondsRemaining = savedEntity.FuelSecondsRemaining,
+                AssignedAsPrimaryBed = savedEntity.AssignedAsPrimaryBed,
+                FuelLastUpdatedTotalSeconds = savedEntity.FuelLastUpdatedTotalSeconds
+            };
+        }
 
         if (savedEntity.StorageInventorySlots is { Count: > 0 } storageSlots)
         {

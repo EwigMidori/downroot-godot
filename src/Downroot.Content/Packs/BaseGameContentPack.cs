@@ -42,6 +42,7 @@ public sealed class BaseGameContentPack : IContentPack
         var chestItemId = new ContentId("basegame:wooden_chest_item");
         var doorItemId = new ContentId("basegame:wooden_door_item");
         var fenceItemId = new ContentId("basegame:wooden_fence_item");
+        var bedItemId = new ContentId("basegame:bed_item");
 
         var furnacePlaceableId = new ContentId("basegame:furnace");
         var stoneWallPlaceableId = new ContentId("basegame:stone_wall");
@@ -52,6 +53,7 @@ public sealed class BaseGameContentPack : IContentPack
         var doorPlaceableId = new ContentId("basegame:wooden_door");
         var fencePlaceableId = new ContentId("basegame:wooden_fence");
         var portalPlaceableId = new ContentId("basegame:portal");
+        var bedPlaceableId = new ContentId("basegame:bed_placeable");
 
         var playerId = new ContentId("basegame:player_human");
         var wormId = new ContentId("basegame:worm");
@@ -77,15 +79,16 @@ public sealed class BaseGameContentPack : IContentPack
         registrar.RegisterTerrain(new TerrainDef(riverWaterId, "River Water", PackId, "packs/basegame/assets/world/terrain/ground/river_water.png", 32, 32, 0, 0));
         registrar.RegisterTerrain(new TerrainDef(dimfragId, "Dimfrag", PackId, "packs/basegame/assets/world/terrain/ground/dimfrag.png", 32, 32, 0, 0));
 
-        registrar.RegisterPlaceable(new PlaceableDef(furnacePlaceableId, "Furnace", PackId, "packs/basegame/assets/production/utility/furnace.png", 32, 32, 0, 0, 5, true, CraftingStationKind.Furnace, true));
+        registrar.RegisterPlaceable(new PlaceableDef(furnacePlaceableId, "Furnace", PackId, "packs/basegame/assets/production/utility/furnace.png", 32, 32, 0, 0, 5, true, CraftingStationKind.Furnace, true, Behaviors: PlaceableBehaviorKind.CraftingStation));
         registrar.RegisterPlaceable(new PlaceableDef(stoneWallPlaceableId, "Stone Wall", PackId, "packs/basegame/assets/structures/walls/stone_wall.png", 32, 32, 0, 0, 5, false, null, true));
         registrar.RegisterPlaceable(new PlaceableDef(stoneFloorPlaceableId, "Stone Floor", PackId, "packs/basegame/assets/world/terrain/floors/stone_floor.png", 32, 32, 0, 0, 2, false, null, false, false, 0, 0, false, true));
-        registrar.RegisterPlaceable(new PlaceableDef(workbenchPlaceableId, "Workbench", PackId, "packs/basegame/assets/production/workstations/workbench.png", 28, 32, 0, 0, 3, true, CraftingStationKind.Workbench, true));
-        registrar.RegisterPlaceable(new PlaceableDef(torchPlaceableId, "Torch", PackId, "packs/basegame/assets/items/torch.png", 16, 16, 0, 0, 1));
-        registrar.RegisterPlaceable(new PlaceableDef(chestPlaceableId, "Wooden Chest", PackId, "packs/basegame/assets/production/storage/wooden_chest.png", 32, 32, 0, 0, 3, false, null, true, true, 1, 0, true, false, true, 16));
-        registrar.RegisterPlaceable(new PlaceableDef(doorPlaceableId, "Wooden Door", PackId, "packs/basegame/assets/structures/doors/wood_door_close_open.png", 32, 32, 0, 0, 3, false, null, true, true, 1, 0, false));
+        registrar.RegisterPlaceable(new PlaceableDef(workbenchPlaceableId, "Workbench", PackId, "packs/basegame/assets/production/workstations/workbench.png", 28, 32, 0, 0, 3, true, CraftingStationKind.Workbench, true, Behaviors: PlaceableBehaviorKind.CraftingStation));
+        registrar.RegisterPlaceable(new PlaceableDef(torchPlaceableId, "Torch", PackId, "packs/basegame/assets/items/torch.png", 16, 16, 0, 0, 1, Behaviors: PlaceableBehaviorKind.LightSource));
+        registrar.RegisterPlaceable(new PlaceableDef(chestPlaceableId, "Wooden Chest", PackId, "packs/basegame/assets/production/storage/wooden_chest.png", 32, 32, 0, 0, 3, false, null, true, true, 1, 0, true, false, true, 16, false, PlaceableBehaviorKind.Storage));
+        registrar.RegisterPlaceable(new PlaceableDef(doorPlaceableId, "Wooden Door", PackId, "packs/basegame/assets/structures/doors/wood_door_close_open.png", 32, 32, 0, 0, 3, false, null, true, true, 1, 0, false, Behaviors: PlaceableBehaviorKind.Door));
         registrar.RegisterPlaceable(new PlaceableDef(fencePlaceableId, "Wooden Fence", PackId, "packs/basegame/assets/structures/fences/wood_fence_horizontal.png", 32, 32, 0, 0, 2, false, null, true, false, 0, 0, false, false, true, 0, true));
         registrar.RegisterPlaceable(new PlaceableDef(portalPlaceableId, "Portal", PackId, "packs/basegame/assets/world/nature/ruins/portal.png", 32, 32, 0, 0, 999, false, null, false, false, 0, 0, false, false, false));
+        registrar.RegisterPlaceable(new PlaceableDef(bedPlaceableId, "Bed", PackId, "packs/basegame/assets/furniture/beds/bed.png", 32, 32, 0, 0, 3, false, null, true, false, 0, 0, false, false, true, 0, false, PlaceableBehaviorKind.Bed));
 
         registrar.RegisterItem(new ItemDef(logItemId, "Log", PackId, "packs/basegame/assets/items/log_item.png", 28, 32, 99));
         registrar.RegisterItem(new ItemDef(stoneItemId, "Stone", PackId, "packs/basegame/assets/items/stone_item.png", 16, 16, 99));
@@ -110,6 +113,7 @@ public sealed class BaseGameContentPack : IContentPack
         registrar.RegisterItem(new ItemDef(chestItemId, "Wooden Chest", PackId, "packs/basegame/assets/production/storage/wooden_chest.png", 32, 32, 8, chestPlaceableId));
         registrar.RegisterItem(new ItemDef(doorItemId, "Wooden Door", PackId, "packs/basegame/assets/structures/doors/wood_door_close_open.png", 32, 32, 8, doorPlaceableId));
         registrar.RegisterItem(new ItemDef(fenceItemId, "Wooden Fence", PackId, "packs/basegame/assets/structures/fences/wood_fence_horizontal.png", 32, 32, 32, fencePlaceableId));
+        registrar.RegisterItem(new ItemDef(bedItemId, "Bed", PackId, "packs/basegame/assets/furniture/beds/bed.png", 32, 32, 4, bedPlaceableId));
 
         registrar.RegisterResourceNode(new ResourceNodeDef(treeNodeId, "Tree", PackId, "packs/basegame/assets/world/nature/trees/bright_green_tree.png", 32, 32, 0, 0, 3, [new ItemAmount(logItemId, 3)], true, false, false, 0, true));
         registrar.RegisterResourceNode(new ResourceNodeDef(stoneNodeId, "Stone Node", PackId, "packs/basegame/assets/world/nature/rocks/stone.png", 32, 32, 0, 0, 1, [new ItemAmount(stoneItemId, 1)], false, true));
@@ -134,6 +138,7 @@ public sealed class BaseGameContentPack : IContentPack
         registrar.RegisterRecipe(new RecipeDef(new ContentId("basegame:craft_chest"), "Wooden Chest", PackId, [new ItemAmount(logItemId, 6)], new ItemAmount(chestItemId, 1), CraftingStationKind.Workbench));
         registrar.RegisterRecipe(new RecipeDef(new ContentId("basegame:craft_door"), "Wooden Door", PackId, [new ItemAmount(logItemId, 4)], new ItemAmount(doorItemId, 1), CraftingStationKind.Workbench));
         registrar.RegisterRecipe(new RecipeDef(new ContentId("basegame:craft_fence"), "Wooden Fence", PackId, [new ItemAmount(logItemId, 2)], new ItemAmount(fenceItemId, 2), CraftingStationKind.Workbench));
+        registrar.RegisterRecipe(new RecipeDef(new ContentId("basegame:craft_bed"), "Bed", PackId, [new ItemAmount(logItemId, 4), new ItemAmount(stoneItemId, 2)], new ItemAmount(bedItemId, 1), CraftingStationKind.Workbench));
         registrar.RegisterRecipe(new RecipeDef(new ContentId("basegame:craft_furnace"), "Furnace", PackId, [new ItemAmount(stoneItemId, 4)], new ItemAmount(furnaceItemId, 1), CraftingStationKind.Workbench));
         registrar.RegisterRecipe(new RecipeDef(new ContentId("basegame:craft_stone_wall"), "Stone Wall", PackId, [new ItemAmount(stoneItemId, 2)], new ItemAmount(stoneWallItemId, 1), CraftingStationKind.Workbench));
         registrar.RegisterRecipe(new RecipeDef(new ContentId("basegame:craft_stone_floor"), "Stone Floor", PackId, [new ItemAmount(stoneItemId, 1)], new ItemAmount(stoneFloorItemId, 1), CraftingStationKind.Workbench));

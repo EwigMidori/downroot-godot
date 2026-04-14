@@ -7,5 +7,9 @@ public enum InteractionVerb
     Close,
     PickUp,
     Gather,
-    Eat
+    Eat,
+    SetHome,
+    Sleep,
+    Light,
+    Extinguish
 }

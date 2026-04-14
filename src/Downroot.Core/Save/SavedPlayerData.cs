@@ -11,5 +11,6 @@ public sealed class SavedPlayerData
     public int Hunger { get; set; }
     public int MaxHunger { get; set; }
     public int SelectedHotbarIndex { get; set; }
+    public string? PrimaryBedEntityGuid { get; set; }
     public IReadOnlyList<SavedInventorySlotData> InventorySlots { get; set; } = [];
 }

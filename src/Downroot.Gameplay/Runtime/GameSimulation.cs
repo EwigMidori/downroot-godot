@@ -23,6 +23,7 @@ public sealed class GameSimulation
     private readonly DestroySystem _destroySystem;
     private readonly CraftingSystem _craftingSystem;
     private readonly CreatureSystem _creatureSystem;
+    private readonly PlaceableStateSystem _placeableStateSystem;
     private readonly DebugRuntimeState? _debugState;
 
     private bool _previousDestroyHeld;
@@ -42,6 +43,7 @@ public sealed class GameSimulation
         _destroySystem = new DestroySystem(runtime, _worldFacade, _worldQuery);
         _craftingSystem = new CraftingSystem(runtime, _worldQuery);
         _creatureSystem = new CreatureSystem(runtime, _worldQuery, _movementSystem, DamagePlayer);
+        _placeableStateSystem = new PlaceableStateSystem(runtime, _worldFacade);
     }
 
     public void Tick(float deltaSeconds, InputFrame input)
@@ -61,6 +63,8 @@ public sealed class GameSimulation
         {
             UpdateWorldTime(deltaSeconds);
         }
+
+        _placeableStateSystem.Update(deltaSeconds);
 
         if (_runtime.WorldState.Travel.IsActive)
         {

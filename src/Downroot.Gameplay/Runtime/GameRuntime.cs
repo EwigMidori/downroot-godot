@@ -4,6 +4,7 @@ using Downroot.Gameplay.Bootstrap;
 using Downroot.Core.World;
 using Downroot.World.Generation;
 using System.Numerics;
+using Downroot.Core.Ids;
 
 namespace Downroot.Gameplay.Runtime;
 
@@ -36,6 +37,11 @@ public sealed class GameRuntime(
     public LoadedWorldState DimShardPocket => WorldState.DimShardPocket;
     public int ChunkWidth => BootstrapConfig.ChunkWidth;
     public int ChunkHeight => BootstrapConfig.ChunkHeight;
+    public EntityId? PrimaryBedEntityId
+    {
+        get => WorldState.PrimaryBedEntityId;
+        set => WorldState.PrimaryBedEntityId = value;
+    }
 
     public LoadedWorldState GetWorld(WorldSpaceKind worldSpaceKind)
     {

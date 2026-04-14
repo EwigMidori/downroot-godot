@@ -42,8 +42,10 @@ public sealed class WorldState
     public DestroyProgressState? ActiveDestroyProgress { get; set; }
     public FurnaceTaskState? ActiveFurnaceTask { get; set; }
     public float PlayerHitFlashSeconds { get; set; }
+    public EntityId? PrimaryBedEntityId { get; set; }
     public long EntityProjectionVersion { get; private set; }
     public bool IsEntityProjectionDirty { get; private set; } = true;
+    public long EntityStateVersion { get; private set; }
 
     public bool IsNight(float dayLengthSeconds) => TimeOfDaySeconds >= dayLengthSeconds * 0.5f;
 
@@ -70,6 +72,11 @@ public sealed class WorldState
     public void MarkEntityProjectionDirty()
     {
         IsEntityProjectionDirty = true;
+    }
+
+    public void NotifyEntityStateChanged()
+    {
+        EntityStateVersion++;
     }
 
     public bool EnsureEntityProjectionCurrent()

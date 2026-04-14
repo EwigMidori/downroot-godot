@@ -10,5 +10,10 @@ public enum StatusEventKind
     InventoryFull,
     CraftFailed,
     EnteredPortal,
-    ReturnedThroughPortal
+    ReturnedThroughPortal,
+    HomeSet,
+    SleptUntilMorning,
+    LightLit,
+    LightExtinguished,
+    LightBurnedOut
 }
