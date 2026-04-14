@@ -14,9 +14,11 @@ public sealed partial class WorldRenderer : Node2D
 {
     private const int TileSize = 32;
     private const int TerrainLayerZ = 0;
-    private const int RaisedFeatureLayerZ = 10_000;
-    private const int GroundCoverLayerZ = 20_000;
-    private const int EntityBandLayerZ = 30_000;
+    private const int RaisedFeatureLayerZ = 256;
+    private const int GroundCoverLayerZ = 512;
+    private const int EntityBandLayerZ = 768;
+    private const int ChunkBoundsLayerZ = 1536;
+    private const int MaxEntitySortSpan = 1023;
 
     private readonly TextureContentLoader _textureLoader;
     private readonly PlayerAnimationFactory _animationFactory;
@@ -690,12 +692,12 @@ public sealed partial class WorldRenderer : Node2D
             return GroundCoverLayerZ;
         }
 
-        return EntityBandLayerZ + (int)MathF.Floor(ResolveEntitySortY(entity));
+        return ResolveEntityBandZ(ResolveEntitySortY(entity));
     }
 
     private int ResolvePlayerZIndex()
     {
-        return EntityBandLayerZ + (int)MathF.Floor(ResolvePlayerSortY());
+        return ResolveEntityBandZ(ResolvePlayerSortY());
     }
 
     private float ResolveEntitySortY(WorldEntityState entity)
@@ -739,6 +741,25 @@ public sealed partial class WorldRenderer : Node2D
         return entity.Position.Y + creatureDef.SpriteHeight * 0.75f;
     }
 
+    private int ResolveEntityBandZ(float sortY)
+    {
+        var sortTileY = (int)MathF.Floor(sortY / TileSize);
+        var localSortTileY = sortTileY - GetVisibleSortOriginTileY();
+        return EntityBandLayerZ + Math.Clamp(localSortTileY, 0, MaxEntitySortSpan);
+    }
+
+    private int GetVisibleSortOriginTileY()
+    {
+        var activeWorld = _worldFacade!.GetActiveWorld();
+        if (activeWorld.LoadedChunks.Count == 0)
+        {
+            return 0;
+        }
+
+        var minChunkY = activeWorld.LoadedChunks.Keys.Min(coord => coord.Y);
+        return minChunkY * _runtime!.ChunkHeight;
+    }
+
     private static string ResolveFacing(NumericsVector2 movement)
     {
         if (MathF.Abs(movement.X) > MathF.Abs(movement.Y))
@@ -757,7 +778,7 @@ public sealed partial class WorldRenderer : Node2D
         {
             Name = $"ChunkBounds_{coord.X}_{coord.Y}",
             Visible = _showChunkBounds,
-            ZIndex = RaisedFeatureLayerZ + 100
+            ZIndex = ChunkBoundsLayerZ
         };
         var chunkPixelWidth = _runtime!.ChunkWidth * TileSize;
         var chunkPixelHeight = _runtime.ChunkHeight * TileSize;

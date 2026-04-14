@@ -8,7 +8,7 @@ namespace Downroot.Game.Runtime;
 
 public partial class AppRoot : Control
 {
-    private const bool EnablePauseInputLogging = false;
+    private static readonly bool EnablePauseInputLogging = true;
     private SavePathResolver? _paths;
     private JsonFileStore? _store;
     private SaveGameRepository? _saves;
