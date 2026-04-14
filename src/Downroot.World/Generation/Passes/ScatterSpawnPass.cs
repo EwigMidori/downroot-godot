@@ -38,6 +38,11 @@ public sealed class ScatterSpawnPass(
                     continue;
                 }
 
+                if (context.HasRaisedFeature(coord))
+                {
+                    continue;
+                }
+
                 candidates.Add(coord);
             }
         }

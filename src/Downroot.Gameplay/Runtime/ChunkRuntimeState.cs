@@ -21,6 +21,7 @@ public sealed class ChunkRuntimeState
     public IReadOnlyDictionary<EntityId, WorldEntityState> RuntimeEntities => _runtimeEntities;
     public HashSet<string> DestroyedNaturalEntityIds { get; } = new(StringComparer.Ordinal);
     public HashSet<string> CollectedNaturalDropIds { get; } = new(StringComparer.Ordinal);
+    public HashSet<WorldTileCoord> RemovedRaisedFeatureTiles { get; } = [];
     public IEnumerable<WorldEntityState> Entities => _naturalEntities.Values.Concat(_runtimeEntities.Values);
 
     public void AddNaturalEntity(WorldEntityState entity)
@@ -53,6 +54,7 @@ public sealed class ChunkRuntimeState
         return new ChunkRuntimeArchive(
             DestroyedNaturalEntityIds.ToArray(),
             CollectedNaturalDropIds.ToArray(),
+            RemovedRaisedFeatureTiles.ToArray(),
             _runtimeEntities.Values
                 .Where(entity => !entity.Removed)
                 .Select(entity => entity.Clone())
@@ -63,6 +65,7 @@ public sealed class ChunkRuntimeState
     {
         DestroyedNaturalEntityIds.UnionWith(archive.DestroyedNaturalEntityIds);
         CollectedNaturalDropIds.UnionWith(archive.CollectedNaturalDropIds);
+        RemovedRaisedFeatureTiles.UnionWith(archive.RemovedRaisedFeatureTiles);
 
         foreach (var destroyedNaturalEntityId in archive.DestroyedNaturalEntityIds)
         {
@@ -79,4 +82,5 @@ public sealed class ChunkRuntimeState
 public sealed record ChunkRuntimeArchive(
     IReadOnlyCollection<string> DestroyedNaturalEntityIds,
     IReadOnlyCollection<string> CollectedNaturalDropIds,
+    IReadOnlyCollection<WorldTileCoord> RemovedRaisedFeatureTiles,
     IReadOnlyCollection<WorldEntityState> RuntimeEntities);

@@ -15,6 +15,7 @@ public sealed class GameSimulation(GameRuntime runtime)
     private const float AttackRange = 28f;
     private const int EmptyHandDamage = 1;
     private readonly ContentId _portalId = new("basegame:portal");
+    private readonly Dictionary<WorldTileCoord, float> _raisedFeatureDamage = [];
     private bool _previousDestroyHeld;
     private bool _suppressDestroyUntilRelease;
 
@@ -203,12 +204,29 @@ public sealed class GameSimulation(GameRuntime runtime)
 
     private void PerformWorldSwitch()
     {
+        if (runtime.WorldState.Travel.TargetWorldSpaceKind == runtime.WorldState.Travel.SourceWorldSpaceKind)
+        {
+            throw new InvalidOperationException("Portal travel must switch to a different world space.");
+        }
+
         runtime.ActiveWorldSpaceKind = runtime.WorldState.Travel.TargetWorldSpaceKind;
+        var activeWorld = runtime.WorldState.GetActiveWorld();
+        if (runtime.ActiveWorldSpaceKind == WorldSpaceKind.DimShardPocket)
+        {
+            if (ReferenceEquals(activeWorld, runtime.Overworld)
+                || activeWorld.Model.WorldSpaceKind != WorldSpaceKind.DimShardPocket
+                || activeWorld.Model.StableId == "overworld"
+                || activeWorld.WorldSeed == runtime.Overworld.WorldSeed)
+            {
+                throw new InvalidOperationException("DimShardPocket travel must activate the independent pocket world container.");
+            }
+        }
+
         runtime.WorldState.WorkspaceMode = CraftWorkspaceMode.Hidden;
         runtime.WorldState.ActiveStationEntityId = null;
         runtime.WorldState.ActiveStationKey = null;
-        UpdateLoadedChunksForWorld(runtime.WorldState.GetActiveWorld(), runtime.WorldState.Travel.TargetPortalTile);
-        runtime.Player.Position = FindPortalLandingPosition(runtime.WorldState.GetActiveWorld(), runtime.WorldState.Travel.TargetPortalTile);
+        UpdateLoadedChunksForWorld(activeWorld, runtime.WorldState.Travel.TargetPortalTile);
+        runtime.Player.Position = FindPortalLandingPosition(activeWorld, runtime.WorldState.Travel.TargetPortalTile);
         runtime.WorldState.RefreshEntityProjection();
         runtime.WorldState.SetStatusEvent(
             runtime.ActiveWorldSpaceKind == WorldSpaceKind.Overworld
@@ -523,7 +541,7 @@ public sealed class GameSimulation(GameRuntime runtime)
             return;
         }
 
-        var target = GetNearestDestructible();
+        var target = GetNearestDestroyTarget();
         if (target is null || !input.DestroyHeld)
         {
             runtime.WorldState.ActiveDestroyProgress = null;
@@ -531,20 +549,24 @@ public sealed class GameSimulation(GameRuntime runtime)
         }
 
         var breakDuration = GetBreakDuration(target);
-        target.DamageAccumulator += deltaSeconds;
-        var progress = Math.Clamp(target.DamageAccumulator / breakDuration, 0f, 1f);
+        var progressValue = target.IsRaisedFeature
+            ? AddRaisedFeatureDamage(target.Tile, deltaSeconds)
+            : AddEntityDamage(target.Entity!, deltaSeconds);
+        var progress = Math.Clamp(progressValue / breakDuration, 0f, 1f);
         runtime.WorldState.ActiveDestroyProgress = new DestroyProgressState(
-            target.Id,
-            target.Kind,
-            target.DefinitionId,
-            target.Position,
+            target.Entity?.Id,
+            target.Entity?.Kind,
+            target.IsRaisedFeature,
+            target.Tile,
+            target.ContentId,
+            runtime.GetWorldPosition(target.Tile),
             progress);
-        if (target.DamageAccumulator < breakDuration)
+        if (progressValue < breakDuration)
         {
             return;
         }
 
-        DestroyEntity(target);
+        DestroyTarget(target);
         runtime.WorldState.ActiveDestroyProgress = null;
     }
 
@@ -597,6 +619,58 @@ public sealed class GameSimulation(GameRuntime runtime)
         }
     }
 
+    private DestroyTarget? GetNearestRaisedFeatureTarget()
+    {
+        var world = runtime.WorldState.GetActiveWorld();
+        var centerTile = runtime.GetWorldTile(runtime.Player.Position);
+        var tileRadius = (int)MathF.Ceiling(InteractionRange / 32f);
+        DestroyTarget? best = null;
+        var bestDistance = float.MaxValue;
+
+        for (var y = centerTile.Y - tileRadius; y <= centerTile.Y + tileRadius; y++)
+        {
+            for (var x = centerTile.X - tileRadius; x <= centerTile.X + tileRadius; x++)
+            {
+                var tile = new WorldTileCoord(x, y);
+                var featureId = world.GetRaisedFeatureId(tile, runtime.ChunkWidth, runtime.ChunkHeight);
+                if (featureId is null)
+                {
+                    continue;
+                }
+
+                var distance = Vector2.Distance(runtime.GetWorldPosition(tile), runtime.Player.Position);
+                if (distance > InteractionRange || distance >= bestDistance)
+                {
+                    continue;
+                }
+
+                bestDistance = distance;
+                best = new DestroyTarget(
+                    true,
+                    tile,
+                    featureId.Value,
+                    runtime.ActiveWorldSpaceKind,
+                    tile.ToChunkCoord(runtime.ChunkWidth, runtime.ChunkHeight));
+            }
+        }
+
+        return best;
+    }
+
+    private float AddEntityDamage(WorldEntityState entity, float deltaSeconds)
+    {
+        entity.DamageAccumulator += deltaSeconds;
+        return entity.DamageAccumulator;
+    }
+
+    private float AddRaisedFeatureDamage(WorldTileCoord tile, float deltaSeconds)
+    {
+        var current = _raisedFeatureDamage.GetValueOrDefault(tile);
+        current += deltaSeconds;
+        _raisedFeatureDamage[tile] = current;
+        return current;
+    }
+
     private WorldEntityState? GetNearestInteractable()
     {
         return runtime.WorldState.Entities
@@ -605,7 +679,21 @@ public sealed class GameSimulation(GameRuntime runtime)
             .FirstOrDefault(entity => Vector2.Distance(entity.Position, runtime.Player.Position) <= InteractionRange);
     }
 
-    private WorldEntityState? GetNearestDestructible()
+    private DestroyTarget? GetNearestDestroyTarget()
+    {
+        var raised = GetNearestRaisedFeatureTarget();
+        if (raised is not null)
+        {
+            return raised;
+        }
+
+        var entity = GetNearestDestructibleEntity();
+        return entity is null
+            ? null
+            : new DestroyTarget(false, runtime.GetWorldTile(entity.Position), entity.DefinitionId, entity.WorldSpaceKind, entity.ChunkCoord, entity);
+    }
+
+    private WorldEntityState? GetNearestDestructibleEntity()
     {
         return runtime.WorldState.Entities
             .Where(entity => !entity.Removed && IsDestructible(entity))
@@ -711,6 +799,54 @@ public sealed class GameSimulation(GameRuntime runtime)
         }
     }
 
+    private void DestroyTarget(DestroyTarget target)
+    {
+        if (target.IsRaisedFeature)
+        {
+            DestroyRaisedFeature(target);
+            return;
+        }
+
+        DestroyEntity(target.Entity!);
+    }
+
+    private void DestroyRaisedFeature(DestroyTarget target)
+    {
+        var world = runtime.GetWorld(target.WorldSpaceKind);
+        if (!world.TryGetChunk(target.ChunkCoord, out var chunk))
+        {
+            return;
+        }
+
+        chunk.RemovedRaisedFeatureTiles.Add(target.Tile);
+        _raisedFeatureDamage.Remove(target.Tile);
+        var raisedFeature = runtime.Content.RaisedFeatures.Get(target.ContentId);
+        foreach (var drop in raisedFeature.Drops)
+        {
+            world.AddRuntimeEntity(new WorldEntityState(
+                WorldEntityKind.ItemDrop,
+                drop.ItemId,
+                runtime.GetWorldPosition(target.Tile),
+                1,
+                target.WorldSpaceKind,
+                target.ChunkCoord,
+                stackCount: drop.Amount));
+        }
+
+        world.MarkRaisedFeatureDirty(EnumerateRaisedFeatureDirtyTiles(target.Tile));
+    }
+
+    private static IEnumerable<WorldTileCoord> EnumerateRaisedFeatureDirtyTiles(WorldTileCoord origin)
+    {
+        for (var dy = -1; dy <= 1; dy++)
+        {
+            for (var dx = -1; dx <= 1; dx++)
+            {
+                yield return new WorldTileCoord(origin.X + dx, origin.Y + dy);
+            }
+        }
+    }
+
     private void DestroyEntity(WorldEntityState entity)
     {
         if (runtime.WorldState.ActiveStationEntityId == entity.Id)
@@ -812,6 +948,18 @@ public sealed class GameSimulation(GameRuntime runtime)
 
     private bool IsBlocked(Vector2 position, Downroot.Core.Ids.EntityId? ignoreEntityId = null)
     {
+        var tile = runtime.GetWorldTile(position);
+        var world = runtime.WorldState.GetActiveWorld();
+        var raisedFeatureId = world.GetRaisedFeatureId(tile, runtime.ChunkWidth, runtime.ChunkHeight);
+        if (raisedFeatureId is not null)
+        {
+            var raisedFeature = runtime.Content.RaisedFeatures.Get(raisedFeatureId.Value);
+            if (raisedFeature.BlocksMovement)
+            {
+                return true;
+            }
+        }
+
         return runtime.WorldState.Entities
             .Where(entity => !entity.Removed && entity.Id != ignoreEntityId)
             .Any(entity =>
@@ -990,6 +1138,17 @@ public sealed class GameSimulation(GameRuntime runtime)
 
         var multiplier = GetSelectedItemDef()?.TreeBreakSpeedMultiplier ?? 1f;
         return Math.Max(0.2f, duration / Math.Max(1f, multiplier));
+    }
+
+    private float GetBreakDuration(DestroyTarget target)
+    {
+        if (!target.IsRaisedFeature)
+        {
+            return GetBreakDuration(target.Entity!);
+        }
+
+        var raisedFeature = runtime.Content.RaisedFeatures.Get(target.ContentId);
+        return Math.Max(1, raisedFeature.MaxDurability);
     }
 
     private WorldEntityState? GetNearestCreature(float range)

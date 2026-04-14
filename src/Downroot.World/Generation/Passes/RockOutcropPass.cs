@@ -24,6 +24,11 @@ public sealed class RockOutcropPass(ContentId outcropId) : IWorldGenPass
                     continue;
                 }
 
+                if (context.HasRaisedFeature(local))
+                {
+                    continue;
+                }
+
                 var world = context.GetWorldTileCoord(local);
                 var density = context.GetStableUnitValue(world, 5003);
                 var ridge = context.GetStableUnitValue(new WorldTileCoord(world.X / 2, world.Y / 2), 5011);

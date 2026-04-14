@@ -13,6 +13,7 @@ public static class WorldGenPassFactory
             "surface-region" => new GrassRegionPass(definition.TargetId),
             "grass-region" => new GrassRegionPass(definition.TargetId),
             "river" => new RiverPass(definition.TargetId),
+            "raised-ore-field" => new RaisedOreFieldPass(definition.TargetId),
             "rock-outcrop" => new RockOutcropPass(definition.TargetId),
             "portal-site" => new PortalSitePass(definition.TargetId),
             "dirt-patch" => new DirtPatchPass(definition.TargetId),

@@ -15,8 +15,13 @@ public interface IWorldGenContext
     bool HasTerrain(ContentId contentId);
     ContentId? GetBaseTerrain(LocalTileCoord coord);
     ContentId? GetTerrain(LocalTileCoord coord);
+    ContentId? GetRaisedFeature(LocalTileCoord coord);
     void SetBaseTerrain(LocalTileCoord coord, ContentId terrainId);
     void SetCoverTerrain(LocalTileCoord coord, ContentId? terrainId);
+    void SetRaisedFeature(LocalTileCoord coord, ContentId featureId);
+    void ClearRaisedFeature(LocalTileCoord coord);
+    bool HasRaisedFeature(LocalTileCoord coord);
+    void SetRaisedFeatureVariantIndex(LocalTileCoord coord, byte index);
     string GetSurfaceRegion(LocalTileCoord coord);
     bool HasSurfaceRegion(LocalTileCoord coord, string regionKey);
     void SetSurfaceRegion(LocalTileCoord coord, string regionKey);

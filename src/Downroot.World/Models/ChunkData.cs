@@ -27,13 +27,32 @@ public sealed class ChunkData
 
     public ContentId? GetBaseTerrainId(int x, int y) => _cells[x, y].BaseTerrainId;
 
+    public ContentId? GetRaisedFeatureId(int x, int y) => _cells[x, y].RaisedFeatureId;
+
+    public byte GetRaisedFeatureVariantIndex(int x, int y) => _cells[x, y].RaisedFeatureVariantIndex;
+
     public string GetSurfaceRegion(int x, int y) => _cells[x, y].SurfaceRegion;
+
+    public bool HasRaisedFeature(int x, int y) => _cells[x, y].RaisedFeatureId is not null;
 
     public bool HasSurfaceRegion(int x, int y, string regionKey) => _cells[x, y].SurfaceRegion == regionKey;
 
     public void SetBaseTerrain(int x, int y, ContentId terrainId) => _cells[x, y].BaseTerrainId = terrainId;
 
     public void SetCoverTerrain(int x, int y, ContentId? terrainId) => _cells[x, y].CoverTerrainId = terrainId;
+
+    public void SetRaisedFeature(int x, int y, ContentId featureId)
+    {
+        _cells[x, y].RaisedFeatureId = featureId;
+    }
+
+    public void ClearRaisedFeature(int x, int y)
+    {
+        _cells[x, y].RaisedFeatureId = null;
+        _cells[x, y].RaisedFeatureVariantIndex = 0;
+    }
+
+    public void SetRaisedFeatureVariantIndex(int x, int y, byte index) => _cells[x, y].RaisedFeatureVariantIndex = index;
 
     public void SetSurfaceRegion(int x, int y, string regionKey) => _cells[x, y].SurfaceRegion = regionKey;
 

@@ -59,6 +59,7 @@ public sealed class GameBootstrapper
             worldState,
             player,
             bootstrapConfig);
+        ValidatePocketWorld(runtime, portalChunk);
 
         var spawnChunk = bootstrapConfig.PlayerSpawn.Tile.ToChunkCoord(runtime.ChunkWidth, runtime.ChunkHeight);
         LoadInitialChunks(runtime, runtime.Overworld, spawnChunk);
@@ -188,5 +189,40 @@ public sealed class GameBootstrapper
     {
         var chunkSummary = string.Join(", ", world.LoadedChunks.Keys.OrderBy(coord => coord.Y).ThenBy(coord => coord.X).Select(coord => $"({coord.X},{coord.Y})"));
         Console.WriteLine($"[WorldGen] loaded {world.WorldSpaceKind} chunks => {chunkSummary}");
+    }
+
+    private static void ValidatePocketWorld(GameRuntime runtime, ChunkCoord portalChunk)
+    {
+        if (!ReferenceEquals(runtime.DimShardPocket.Model, runtime.WorldState.DimShardPocket.Model))
+        {
+            throw new InvalidOperationException("DimShardPocket must have its own world model.");
+        }
+
+        if (ReferenceEquals(runtime.Overworld.Model, runtime.DimShardPocket.Model))
+        {
+            throw new InvalidOperationException("DimShardPocket cannot share WorldModel with Overworld.");
+        }
+
+        if (ReferenceEquals(runtime.Overworld, runtime.DimShardPocket))
+        {
+            throw new InvalidOperationException("DimShardPocket must use its own LoadedWorldState.");
+        }
+
+        if (runtime.DimShardPocket.WorldSpaceKind != WorldSpaceKind.DimShardPocket)
+        {
+            throw new InvalidOperationException("Pocket world must be tagged as DimShardPocket.");
+        }
+
+        var expectedStableId = CreatePocketWorldId(runtime.BootstrapConfig.WorldSeed, portalChunk);
+        if (!string.Equals(runtime.DimShardPocket.Model.StableId, expectedStableId, StringComparison.Ordinal))
+        {
+            throw new InvalidOperationException("Pocket world stable id does not match the required format.");
+        }
+
+        var expectedSeed = CreatePocketWorldSeed(runtime.BootstrapConfig.WorldSeed, portalChunk);
+        if (runtime.DimShardPocket.WorldSeed != expectedSeed || runtime.DimShardPocket.WorldSeed == runtime.Overworld.WorldSeed)
+        {
+            throw new InvalidOperationException("Pocket world seed must be independently derived from the overworld seed and portal chunk.");
+        }
     }
 }

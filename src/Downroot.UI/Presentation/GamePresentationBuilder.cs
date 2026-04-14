@@ -163,7 +163,9 @@ public sealed class GamePresentationBuilder
             null => new DestroyProgressViewData(false, string.Empty, 0f, default),
             var progress => new DestroyProgressViewData(
                 true,
-                ResolveTargetName(runtime.Content, progress.EntityKind, progress.ContentId),
+                progress.IsRaisedFeature
+                    ? runtime.Content.RaisedFeatures.Get(progress.ContentId).DisplayName
+                    : ResolveTargetName(runtime.Content, progress.EntityKind!.Value, progress.ContentId),
                 progress.Progress01,
                 progress.WorldPosition)
         };

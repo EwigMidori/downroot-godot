@@ -31,7 +31,7 @@ public sealed class RiverPass(ContentId riverTerrainId) : IWorldGenPass
         }
     }
 
-    private static bool IsRiverTile(IWorldGenContext context, WorldTileCoord world)
+    public static bool IsRiverTile(IWorldGenContext context, WorldTileCoord world)
     {
         var primaryCenter = (MathF.Sin((world.X * 0.085f) + (context.WorldSeed * 0.013f)) * 4.25f)
             + (context.GetStableUnitValue(new WorldTileCoord(world.X / 6, 0), 991) * 6f)

@@ -42,7 +42,7 @@ public sealed class GrassRegionPass(ContentId terrainId) : IWorldGenPass
         }
     }
 
-    private static float SampleLayeredNoise(IWorldGenContext context, WorldTileCoord coord)
+    public static float SampleLayeredNoise(IWorldGenContext context, WorldTileCoord coord)
     {
         var baseNoise = SampleValueNoise(context, coord.X * BaseFrequency, coord.Y * BaseFrequency, 17);
         var detailNoise = SampleValueNoise(context, coord.X * DetailFrequency, coord.Y * DetailFrequency, 79);

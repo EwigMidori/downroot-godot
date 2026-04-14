@@ -52,6 +52,20 @@ public sealed class TextureContentLoader(PackPathResolver packPathResolver)
         };
     }
 
+    public TextureLoadResult LoadRaisedFeature(RaisedFeatureDef raisedFeatureDef, byte variantIndex)
+    {
+        if (variantIndex >= raisedFeatureDef.AutoTileColumnCount)
+        {
+            throw new ArgumentOutOfRangeException(nameof(variantIndex), $"Raised feature variant {variantIndex} exceeds atlas column count {raisedFeatureDef.AutoTileColumnCount}.");
+        }
+
+        var texture = LoadTexture(raisedFeatureDef.Id.Value, raisedFeatureDef.TexturePath);
+        return texture with
+        {
+            Texture = ToAtlas(texture.Texture, raisedFeatureDef.TileWidth, raisedFeatureDef.TileHeight, variantIndex, 0)
+        };
+    }
+
     public TextureLoadResult LoadCreature(CreatureDef creatureDef)
     {
         var path = creatureDef.WorldSpritePath ?? creatureDef.IdleSpriteSheetPath;

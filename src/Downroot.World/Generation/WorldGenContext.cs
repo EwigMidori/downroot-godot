@@ -54,9 +54,19 @@ public sealed class WorldGenContext(
 
     public ContentId? GetTerrain(LocalTileCoord coord) => surface.GetTerrainId(coord.X, coord.Y);
 
+    public ContentId? GetRaisedFeature(LocalTileCoord coord) => surface.GetRaisedFeatureId(coord.X, coord.Y);
+
     public void SetBaseTerrain(LocalTileCoord coord, ContentId terrainId) => surface.SetBaseTerrain(coord.X, coord.Y, terrainId);
 
     public void SetCoverTerrain(LocalTileCoord coord, ContentId? terrainId) => surface.SetCoverTerrain(coord.X, coord.Y, terrainId);
+
+    public void SetRaisedFeature(LocalTileCoord coord, ContentId featureId) => surface.SetRaisedFeature(coord.X, coord.Y, featureId);
+
+    public void ClearRaisedFeature(LocalTileCoord coord) => surface.ClearRaisedFeature(coord.X, coord.Y);
+
+    public bool HasRaisedFeature(LocalTileCoord coord) => surface.HasRaisedFeature(coord.X, coord.Y);
+
+    public void SetRaisedFeatureVariantIndex(LocalTileCoord coord, byte index) => surface.SetRaisedFeatureVariantIndex(coord.X, coord.Y, index);
 
     public string GetSurfaceRegion(LocalTileCoord coord) => surface.GetSurfaceRegion(coord.X, coord.Y);
 

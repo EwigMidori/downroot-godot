@@ -43,6 +43,7 @@ public sealed partial class WorldRenderer : Node2D
         AddChild(_entityLayer);
         CreatePlayer();
         SynchronizeChunks();
+        RefreshDirtyRaisedFeatures();
         SynchronizeEntities();
     }
 
@@ -77,9 +78,10 @@ public sealed partial class WorldRenderer : Node2D
         _ = ResolveTerrainTexture(runtime.Content.Terrains.Get(new ContentId("basegame:dimfrag")));
         _ = ResolveItemTexture(runtime.Content.Items.Get(new ContentId("basegame:stone")));
         _ = ResolveItemTexture(runtime.Content.Items.Get(new ContentId("basegame:frostcore")));
+        _ = ResolveRaisedFeatureTexture(runtime.Content.RaisedFeatures.Get(new ContentId("basegame:voidite_raised")), 0);
+        _ = ResolveRaisedFeatureTexture(runtime.Content.RaisedFeatures.Get(new ContentId("basegame:frostcore_raised")), 0);
         _ = ResolvePlaceableTexture(runtime.Content.Placeables.Get(new ContentId("basegame:portal")), false);
         _ = ResolveResourceNodeTexture(runtime.Content.ResourceNodes.Get(new ContentId("basegame:rock_outcrop")));
-        _ = ResolveResourceNodeTexture(runtime.Content.ResourceNodes.Get(new ContentId("basegame:frostcore_node")));
         GD.Print($"Loaded chunks: {runtime.WorldState.GetActiveWorld().LoadedChunks.Count}, active entities: {runtime.WorldState.Entities.Count}");
     }
 
@@ -100,6 +102,7 @@ public sealed partial class WorldRenderer : Node2D
         foreach (var staleChunk in _chunkVisuals.Keys.Where(coord => !desiredChunks.Contains(coord)).ToArray())
         {
             _chunkVisuals[staleChunk].TerrainRoot.QueueFree();
+            _chunkVisuals[staleChunk].RaisedFeatureRoot.QueueFree();
             _chunkVisuals[staleChunk].EntityRoot.QueueFree();
             _chunkVisuals.Remove(staleChunk);
         }
@@ -112,11 +115,14 @@ public sealed partial class WorldRenderer : Node2D
             }
 
             var terrainRoot = new Node2D { Name = $"ChunkTerrain_{pair.Key.X}_{pair.Key.Y}" };
+            var raisedFeatureRoot = new Node2D { Name = $"ChunkRaised_{pair.Key.X}_{pair.Key.Y}" };
             var entityRoot = new Node2D { Name = $"ChunkEntities_{pair.Key.X}_{pair.Key.Y}" };
             _terrainLayer!.AddChild(terrainRoot);
+            _terrainLayer.AddChild(raisedFeatureRoot);
             _entityLayer!.AddChild(entityRoot);
-            _chunkVisuals.Add(pair.Key, new ChunkVisualState(terrainRoot, entityRoot));
+            _chunkVisuals.Add(pair.Key, new ChunkVisualState(terrainRoot, raisedFeatureRoot, entityRoot));
             BuildChunkTerrain(pair.Value.GeneratedChunk, terrainRoot);
+            BuildChunkRaisedFeatures(pair.Value, _chunkVisuals[pair.Key]);
         }
     }
 
@@ -138,6 +144,61 @@ public sealed partial class WorldRenderer : Node2D
                 });
             }
         }
+    }
+
+    private void BuildChunkRaisedFeatures(ChunkRuntimeState chunk, ChunkVisualState visual)
+    {
+        var chunkOriginTile = WorldTileCoord.FromChunkAndLocal(chunk.GeneratedChunk.Coord, new LocalTileCoord(0, 0), _runtime!.ChunkWidth, _runtime.ChunkHeight);
+        for (var y = 0; y < chunk.GeneratedChunk.Surface.Height; y++)
+        {
+            for (var x = 0; x < chunk.GeneratedChunk.Surface.Width; x++)
+            {
+                RefreshRaisedFeatureTile(new WorldTileCoord(chunkOriginTile.X + x, chunkOriginTile.Y + y), visual);
+            }
+        }
+    }
+
+    private void RefreshDirtyRaisedFeatures()
+    {
+        var world = _runtime!.WorldState.GetActiveWorld();
+        foreach (var tile in world.ConsumeDirtyRaisedFeatureTiles())
+        {
+            var chunkCoord = tile.ToChunkCoord(_runtime.ChunkWidth, _runtime.ChunkHeight);
+            if (!_chunkVisuals.TryGetValue(chunkCoord, out var visual))
+            {
+                continue;
+            }
+
+            RefreshRaisedFeatureTile(tile, visual);
+        }
+    }
+
+    private void RefreshRaisedFeatureTile(WorldTileCoord tile, ChunkVisualState visual)
+    {
+        var key = $"{tile.X},{tile.Y}";
+        if (visual.RaisedSprites.Remove(key, out var existing))
+        {
+            existing.QueueFree();
+        }
+
+        var world = _runtime!.WorldState.GetActiveWorld();
+        var featureId = world.GetRaisedFeatureId(tile, _runtime.ChunkWidth, _runtime.ChunkHeight);
+        if (featureId is null)
+        {
+            return;
+        }
+
+        var raisedFeature = _runtime.Content.RaisedFeatures.Get(featureId.Value);
+        var sprite = new Sprite2D
+        {
+            Name = $"Raised_{tile.X}_{tile.Y}",
+            Centered = false,
+            Texture = ResolveRaisedFeatureTexture(raisedFeature, world.GetRaisedFeatureVariantIndex(tile, _runtime.ChunkWidth, _runtime.ChunkHeight)),
+            Position = new Vector2(tile.X * TileSize, tile.Y * TileSize),
+            ZIndex = 2
+        };
+        visual.RaisedFeatureRoot.AddChild(sprite);
+        visual.RaisedSprites[key] = sprite;
     }
 
     private void CreatePlayer()
@@ -228,6 +289,11 @@ public sealed partial class WorldRenderer : Node2D
         return ResolveCachedTexture($"resource:{resourceNodeDef.Id.Value}", () => _textureLoader.LoadResourceNode(resourceNodeDef).Texture);
     }
 
+    private Texture2D ResolveRaisedFeatureTexture(RaisedFeatureDef raisedFeatureDef, byte variantIndex)
+    {
+        return ResolveCachedTexture($"raised:{raisedFeatureDef.Id.Value}:{variantIndex}", () => _textureLoader.LoadRaisedFeature(raisedFeatureDef, variantIndex).Texture);
+    }
+
     private Texture2D ResolveCreatureTexture(CreatureDef creatureDef)
     {
         return ResolveCachedTexture($"creature:{creatureDef.Id.Value}", () => _textureLoader.LoadCreature(creatureDef).Texture);
@@ -270,5 +336,15 @@ public sealed partial class WorldRenderer : Node2D
 
     private static Vector2 ToGodot(NumericsVector2 vector) => new(vector.X, vector.Y);
 
-    private sealed record ChunkVisualState(Node2D TerrainRoot, Node2D EntityRoot);
+    private sealed record ChunkVisualState(
+        Node2D TerrainRoot,
+        Node2D RaisedFeatureRoot,
+        Node2D EntityRoot,
+        Dictionary<string, Sprite2D> RaisedSprites)
+    {
+        public ChunkVisualState(Node2D terrainRoot, Node2D raisedFeatureRoot, Node2D entityRoot)
+            : this(terrainRoot, raisedFeatureRoot, entityRoot, [])
+        {
+        }
+    }
 }
