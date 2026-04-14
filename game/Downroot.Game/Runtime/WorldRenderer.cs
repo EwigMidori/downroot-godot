@@ -22,7 +22,10 @@ public sealed partial class WorldRenderer : Node2D
     private readonly PlayerAnimationFactory _animationFactory;
     private readonly Dictionary<string, Texture2D> _textureCache = [];
     private readonly Dictionary<EntityId, Sprite2D> _entitySprites = [];
+    private readonly Dictionary<EntityId, EntityVisualState> _entityVisualStates = [];
     private readonly Dictionary<EntityId, ChunkCoord> _entitySpriteChunks = [];
+    private readonly HashSet<EntityId> _dynamicEntityIds = [];
+    private readonly HashSet<EntityId> _staticEntityIds = [];
     private readonly Dictionary<ChunkCoord, ChunkVisualState> _chunkVisuals = [];
 
     private GameRuntime? _runtime;
@@ -217,7 +220,10 @@ public sealed partial class WorldRenderer : Node2D
         }
 
         _entitySprites.Clear();
+        _entityVisualStates.Clear();
         _entitySpriteChunks.Clear();
+        _dynamicEntityIds.Clear();
+        _staticEntityIds.Clear();
         _lastChunkVisualVersion = -1;
         _lastEntityProjectionVersion = -1;
     }
@@ -334,7 +340,10 @@ public sealed partial class WorldRenderer : Node2D
         {
             _entitySprites[removedId].QueueFree();
             _entitySprites.Remove(removedId);
+            _entityVisualStates.Remove(removedId);
             _entitySpriteChunks.Remove(removedId);
+            _dynamicEntityIds.Remove(removedId);
+            _staticEntityIds.Remove(removedId);
         }
 
         foreach (var entity in runtime.WorldState.Entities.Where(entity => !entity.Removed))
@@ -350,37 +359,139 @@ public sealed partial class WorldRenderer : Node2D
                 chunkVisual.EntityRoot.AddChild(sprite);
                 _entitySprites.Add(entity.Id, sprite);
                 _entitySpriteChunks[entity.Id] = entity.ChunkCoord;
+                _entityVisualStates[entity.Id] = EntityVisualState.CreateUninitialized(entity.OpenState);
             }
             else if (_entitySpriteChunks[entity.Id] != entity.ChunkCoord)
             {
                 sprite.Reparent(chunkVisual.EntityRoot);
                 _entitySpriteChunks[entity.Id] = entity.ChunkCoord;
             }
+
+            if (IsDynamicEntity(entity))
+            {
+                _dynamicEntityIds.Add(entity.Id);
+                _staticEntityIds.Remove(entity.Id);
+            }
+            else
+            {
+                _staticEntityIds.Add(entity.Id);
+                _dynamicEntityIds.Remove(entity.Id);
+            }
         }
     }
 
     private void UpdateEntitySprites()
     {
-        foreach (var entity in _runtime!.WorldState.Entities.Where(entity => !entity.Removed))
+        var runtime = _runtime!;
+        foreach (var entityId in _dynamicEntityIds.ToArray())
         {
-            if (!_entitySprites.TryGetValue(entity.Id, out var sprite))
+            if (!TryGetRenderableEntity(entityId, out var entity, out var sprite))
             {
                 continue;
             }
 
-            sprite.Texture = entity.Kind switch
-            {
-                WorldEntityKind.ResourceNode => ResolveResourceNodeTexture(_runtime.Content.ResourceNodes.Get(entity.DefinitionId)),
-                WorldEntityKind.Placeable => ResolvePlaceableTexture(_runtime.Content.Placeables.Get(entity.DefinitionId), entity.OpenState),
-                WorldEntityKind.Creature => ResolveCreatureTexture(_runtime.Content.Creatures.Get(entity.DefinitionId)),
-                WorldEntityKind.ItemDrop => ResolveItemTexture(_runtime.Content.Items.Get(entity.DefinitionId)),
-                _ => throw new InvalidOperationException($"Unsupported entity kind '{entity.Kind}'.")
-            };
-            sprite.Position = ToGodot(entity.Position);
-            sprite.FlipH = entity.Kind == WorldEntityKind.Creature && entity.Position.X > _runtime.Player.Position.X;
-            sprite.Modulate = entity.HitFlashSeconds > 0f ? new Color(1f, 0.65f, 0.65f, 1f) : Colors.White;
-            sprite.ZIndex = ResolveZIndex(entity);
+            ApplyEntityVisual(entity, sprite, runtime);
         }
+
+        foreach (var entityId in _staticEntityIds.ToArray())
+        {
+            if (!TryGetRenderableEntity(entityId, out var entity, out var sprite))
+            {
+                continue;
+            }
+
+            if (!NeedsStaticRefresh(entity))
+            {
+                continue;
+            }
+
+            ApplyEntityVisual(entity, sprite, runtime);
+        }
+    }
+
+    private bool TryGetRenderableEntity(EntityId entityId, out WorldEntityState entity, out Sprite2D sprite)
+    {
+        entity = null!;
+        sprite = null!;
+        Sprite2D? resolvedSprite = null;
+        if (!_worldFacade!.TryGetActiveEntity(entityId, out var activeEntity)
+            || activeEntity.Removed
+            || !_entitySprites.TryGetValue(entityId, out resolvedSprite))
+        {
+            return false;
+        }
+
+        entity = activeEntity;
+        sprite = resolvedSprite;
+        return true;
+    }
+
+    private bool NeedsStaticRefresh(WorldEntityState entity)
+    {
+        var current = BuildEntityVisualState(entity, _runtime!);
+        return !_entityVisualStates.TryGetValue(entity.Id, out var cached)
+            || !cached.Matches(current);
+    }
+
+    private void ApplyEntityVisual(WorldEntityState entity, Sprite2D sprite, GameRuntime runtime)
+    {
+        var nextState = BuildEntityVisualState(entity, runtime);
+        if (!_entityVisualStates.TryGetValue(entity.Id, out var currentState))
+        {
+            currentState = EntityVisualState.CreateUninitialized(entity.OpenState);
+        }
+
+        if (!ReferenceEquals(currentState.Texture, nextState.Texture))
+        {
+            sprite.Texture = nextState.Texture;
+        }
+
+        if (currentState.Position != nextState.Position)
+        {
+            sprite.Position = nextState.Position;
+        }
+
+        if (currentState.FlipH != nextState.FlipH)
+        {
+            sprite.FlipH = nextState.FlipH;
+        }
+
+        if (currentState.Modulate != nextState.Modulate)
+        {
+            sprite.Modulate = nextState.Modulate;
+        }
+
+        if (currentState.ZIndex != nextState.ZIndex)
+        {
+            sprite.ZIndex = nextState.ZIndex;
+        }
+
+        _entityVisualStates[entity.Id] = nextState;
+    }
+
+    private EntityVisualState BuildEntityVisualState(WorldEntityState entity, GameRuntime runtime)
+    {
+        var texture = entity.Kind switch
+        {
+            WorldEntityKind.ResourceNode => ResolveResourceNodeTexture(runtime.Content.ResourceNodes.Get(entity.DefinitionId)),
+            WorldEntityKind.Placeable => ResolvePlaceableTexture(runtime.Content.Placeables.Get(entity.DefinitionId), entity.OpenState),
+            WorldEntityKind.Creature => ResolveCreatureTexture(runtime.Content.Creatures.Get(entity.DefinitionId)),
+            WorldEntityKind.ItemDrop => ResolveItemTexture(runtime.Content.Items.Get(entity.DefinitionId)),
+            _ => throw new InvalidOperationException($"Unsupported entity kind '{entity.Kind}'.")
+        };
+
+        return new EntityVisualState(
+            texture,
+            ToGodot(entity.Position),
+            entity.Kind == WorldEntityKind.Creature && entity.Position.X > runtime.Player.Position.X,
+            entity.HitFlashSeconds > 0f ? new Color(1f, 0.65f, 0.65f, 1f) : Colors.White,
+            ResolveZIndex(entity),
+            entity.OpenState);
+    }
+
+    private static bool IsDynamicEntity(WorldEntityState entity)
+    {
+        return entity.Kind is WorldEntityKind.Creature or WorldEntityKind.ItemDrop;
     }
 
     private Texture2D ResolveTerrainTexture(TerrainDef terrainDef, int atlasColumn, int atlasRow)
@@ -531,6 +642,30 @@ public sealed partial class WorldRenderer : Node2D
         public ChunkVisualState(Node2D terrainRoot, Node2D raisedFeatureRoot, Node2D entityRoot)
             : this(terrainRoot, raisedFeatureRoot, entityRoot, [])
         {
+        }
+    }
+
+    private readonly record struct EntityVisualState(
+        Texture2D? Texture,
+        Vector2 Position,
+        bool FlipH,
+        Color Modulate,
+        int ZIndex,
+        bool OpenState)
+    {
+        public static EntityVisualState CreateUninitialized(bool openState)
+        {
+            return new EntityVisualState(null, new Vector2(float.NaN, float.NaN), false, new Color(0f, 0f, 0f, 0f), int.MinValue, openState);
+        }
+
+        public bool Matches(EntityVisualState other)
+        {
+            return ReferenceEquals(Texture, other.Texture)
+                && Position == other.Position
+                && FlipH == other.FlipH
+                && Modulate == other.Modulate
+                && ZIndex == other.ZIndex
+                && OpenState == other.OpenState;
         }
     }
 }
