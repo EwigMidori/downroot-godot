@@ -8,6 +8,15 @@ namespace Downroot.Gameplay.Runtime;
 
 public sealed class WorldRuntimeFacade(GameRuntime runtime)
 {
+    private IEnumerable<LoadedWorldState> Worlds
+    {
+        get
+        {
+            yield return runtime.Overworld;
+            yield return runtime.DimShardPocket;
+        }
+    }
+
     public IReadOnlyList<WorldEntityState> GetActiveProjection()
     {
         runtime.WorldState.EnsureEntityProjectionCurrent();
@@ -80,6 +89,11 @@ public sealed class WorldRuntimeFacade(GameRuntime runtime)
         return GetActiveWorld().TryGetEntity(entityId, out entity);
     }
 
+    public bool ContainsPersistedEntity(EntityId entityId)
+    {
+        return Worlds.Any(world => world.ContainsPersistedEntity(entityId));
+    }
+
     public void NotifyEntityStateChanged(WorldEntityState entity)
     {
         GetWorld(entity.WorldSpaceKind).NotifyEntityStateChanged(entity);
@@ -127,6 +141,37 @@ public sealed class WorldRuntimeFacade(GameRuntime runtime)
         }
 
         placeableDef = null!;
+        return false;
+    }
+
+    public void ClearPrimaryBedAssignments()
+    {
+        foreach (var world in Worlds)
+        {
+            foreach (var entity in world.ClearAssignedPrimaryBeds())
+            {
+                NotifyEntityStateChanged(entity);
+            }
+        }
+    }
+
+    public bool TryAssignPrimaryBed(EntityId entityId)
+    {
+        foreach (var world in Worlds)
+        {
+            if (!world.TryAssignPrimaryBed(entityId, out var loadedEntity))
+            {
+                continue;
+            }
+
+            if (loadedEntity is not null)
+            {
+                NotifyEntityStateChanged(loadedEntity);
+            }
+
+            return true;
+        }
+
         return false;
     }
 }

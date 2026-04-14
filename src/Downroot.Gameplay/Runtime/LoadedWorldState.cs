@@ -47,6 +47,74 @@ public sealed class LoadedWorldState
 
     public bool TryGetEntity(EntityId entityId, out WorldEntityState entity) => _loadedEntitiesById.TryGetValue(entityId, out entity!);
 
+    public bool ContainsPersistedEntity(EntityId entityId)
+    {
+        if (_loadedEntitiesById.ContainsKey(entityId))
+        {
+            return true;
+        }
+
+        return _archivedChunks.Values.Any(archive => archive.RuntimeEntities.Any(entity => entity.Id == entityId && !entity.Removed));
+    }
+
+    public IReadOnlyList<WorldEntityState> ClearAssignedPrimaryBeds()
+    {
+        var changedLoadedEntities = new List<WorldEntityState>();
+        foreach (var entity in _loadedEntitiesById.Values)
+        {
+            if (entity.PlaceableState?.AssignedAsPrimaryBed != true)
+            {
+                continue;
+            }
+
+            entity.PlaceableState.AssignedAsPrimaryBed = false;
+            changedLoadedEntities.Add(entity);
+        }
+
+        foreach (var archive in _archivedChunks.Values)
+        {
+            foreach (var entity in archive.RuntimeEntities)
+            {
+                if (entity.PlaceableState?.AssignedAsPrimaryBed != true)
+                {
+                    continue;
+                }
+
+                entity.PlaceableState.AssignedAsPrimaryBed = false;
+            }
+        }
+
+        return changedLoadedEntities;
+    }
+
+    public bool TryAssignPrimaryBed(EntityId entityId, out WorldEntityState? loadedEntity)
+    {
+        if (_loadedEntitiesById.TryGetValue(entityId, out var activeEntity))
+        {
+            activeEntity.PlaceableState ??= new PlaceableRuntimeState();
+            activeEntity.PlaceableState.AssignedAsPrimaryBed = true;
+            loadedEntity = activeEntity;
+            return true;
+        }
+
+        foreach (var archive in _archivedChunks.Values)
+        {
+            var archivedEntity = archive.RuntimeEntities.FirstOrDefault(entity => entity.Id == entityId && !entity.Removed);
+            if (archivedEntity is null)
+            {
+                continue;
+            }
+
+            archivedEntity.PlaceableState ??= new PlaceableRuntimeState();
+            archivedEntity.PlaceableState.AssignedAsPrimaryBed = true;
+            loadedEntity = null;
+            return true;
+        }
+
+        loadedEntity = null;
+        return false;
+    }
+
     public bool TryGetChunkForTile(WorldTileCoord tile, int chunkWidth, int chunkHeight, out ChunkRuntimeState chunk, out LocalTileCoord localCoord)
     {
         var chunkCoord = tile.ToChunkCoord(chunkWidth, chunkHeight);

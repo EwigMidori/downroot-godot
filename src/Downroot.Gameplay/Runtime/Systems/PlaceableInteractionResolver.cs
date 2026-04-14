@@ -182,26 +182,14 @@ public sealed class PlaceableInteractionResolver(
 
     private void SetPrimaryBed(WorldEntityState entity)
     {
-        if (runtime.PrimaryBedEntityId == entity.Id)
+        worldFacade.ClearPrimaryBedAssignments();
+        runtime.PrimaryBedEntityId = entity.Id;
+        if (!worldFacade.TryAssignPrimaryBed(entity.Id))
         {
             entity.PlaceableState ??= new PlaceableRuntimeState();
             entity.PlaceableState.AssignedAsPrimaryBed = true;
             worldFacade.NotifyEntityStateChanged(entity);
-            return;
         }
-
-        if (runtime.PrimaryBedEntityId is { } previousId
-            && worldQuery.TryGetActiveEntity(previousId, out var previousBed))
-        {
-            previousBed.PlaceableState ??= new PlaceableRuntimeState();
-            previousBed.PlaceableState.AssignedAsPrimaryBed = false;
-            worldFacade.NotifyEntityStateChanged(previousBed);
-        }
-
-        runtime.PrimaryBedEntityId = entity.Id;
-        entity.PlaceableState ??= new PlaceableRuntimeState();
-        entity.PlaceableState.AssignedAsPrimaryBed = true;
-        worldFacade.NotifyEntityStateChanged(entity);
     }
 
     private void SleepUntilMorning()
