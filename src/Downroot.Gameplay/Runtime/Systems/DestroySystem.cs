@@ -152,7 +152,7 @@ public sealed class DestroySystem(GameRuntime runtime, WorldRuntimeFacade worldF
                 foreach (var drop in resourceDef.Drops)
                 {
                     var worldTile = worldFacade.GetWorldTile(entity.Position);
-                    worldFacade.GetWorld(entity.WorldSpaceKind).AddRuntimeEntity(new WorldEntityState(
+                    worldFacade.AddRuntimeEntity(entity.WorldSpaceKind, new WorldEntityState(
                         WorldEntityKind.ItemDrop,
                         drop.ItemId,
                         entity.Position,
@@ -167,7 +167,7 @@ public sealed class DestroySystem(GameRuntime runtime, WorldRuntimeFacade worldF
                 if (itemDef is not null)
                 {
                     var worldTile = worldFacade.GetWorldTile(entity.Position);
-                    worldFacade.GetWorld(entity.WorldSpaceKind).AddRuntimeEntity(new WorldEntityState(
+                    worldFacade.AddRuntimeEntity(entity.WorldSpaceKind, new WorldEntityState(
                         WorldEntityKind.ItemDrop,
                         itemDef.Id,
                         entity.Position,

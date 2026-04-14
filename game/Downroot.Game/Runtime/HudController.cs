@@ -26,6 +26,7 @@ public sealed class HudController
     private string? _recipeStructureKey;
     private string? _recipeStateKey;
     private string? _lastLayoutKey;
+    private CraftingPanelViewData? _cachedCraftingPanel;
 
     public HudController(Node host, TextureContentLoader textureLoader)
     {
@@ -106,14 +107,22 @@ public sealed class HudController
             _recipeStructureKey = null;
             _recipeStateKey = null;
             _lastInventorySignature = null;
-            return new CraftingPanelViewData(false, "Handcraft", CraftModeIconKind.Handcraft, [], []);
+            _cachedCraftingPanel = new CraftingPanelViewData(false, "Handcraft", CraftModeIconKind.Handcraft, [], []);
+            return _cachedCraftingPanel;
         }
 
         var inventorySignature = ComputeSlotSignature(runtime, 16, includeSelection: true);
         var recipeIds = _simulation!.GetRecipesForWorkspace(workspaceMode).Select(recipe => recipe.Id.Value).ToArray();
         var recipeStructureKey = $"{workspaceMode}:{string.Join(',', recipeIds)}";
         var recipeStateKey = $"{workspaceMode}:{inventorySignature}:{runtime.WorldState.ActiveFurnaceTask?.RecipeId.Value ?? string.Empty}:{runtime.WorldState.ActiveFurnaceTask is not null}";
-        var panelViewData = _builder.BuildCraftingPanel(runtime, _simulation!);
+        var requiresPanelRebuild = _cachedCraftingPanel is null
+            || _recipeStructureKey != recipeStructureKey
+            || _recipeStateKey != recipeStateKey
+            || _lastInventorySignature != inventorySignature;
+        var panelViewData = requiresPanelRebuild
+            ? _builder.BuildCraftingPanel(runtime, _simulation!)
+            : _cachedCraftingPanel!;
+        _cachedCraftingPanel = panelViewData;
 
         _view.CraftModeLabel.Text = panelViewData.CraftModeLabel;
         _view.CraftModeIcon.Texture = _view.CreateCraftModeIcon(panelViewData.CraftModeIcon);

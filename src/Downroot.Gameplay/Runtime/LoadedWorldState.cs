@@ -2,6 +2,7 @@ using Downroot.Content.Registries;
 using Downroot.Core.Ids;
 using Downroot.Core.World;
 using Downroot.World.Models;
+using System.Numerics;
 
 namespace Downroot.Gameplay.Runtime;
 
@@ -258,21 +259,37 @@ public sealed class LoadedWorldState
         UpdateBlockerIndex(entity);
     }
 
-    public bool IsBlocked(WorldTileCoord tile, EntityId? ignoreEntityId)
+    public bool IsBlocked(Vector2 position, float blockingRadius, EntityId? ignoreEntityId)
     {
-        if (!_blockingEntitiesByTile.TryGetValue(tile, out var blockers))
-        {
-            return false;
-        }
+        var centerTile = new WorldTileCoord(
+            (int)MathF.Floor(position.X / 32f),
+            (int)MathF.Floor(position.Y / 32f));
+        var tileRadius = (int)MathF.Ceiling(blockingRadius / 32f);
+        var blockingRadiusSquared = blockingRadius * blockingRadius;
 
-        foreach (var blocker in blockers)
+        for (var dy = -tileRadius; dy <= tileRadius; dy++)
         {
-            if (blocker.Removed || blocker.Id == ignoreEntityId)
+            for (var dx = -tileRadius; dx <= tileRadius; dx++)
             {
-                continue;
-            }
+                var tile = new WorldTileCoord(centerTile.X + dx, centerTile.Y + dy);
+                if (!_blockingEntitiesByTile.TryGetValue(tile, out var blockers))
+                {
+                    continue;
+                }
 
-            return true;
+                foreach (var blocker in blockers)
+                {
+                    if (blocker.Removed || blocker.Id == ignoreEntityId)
+                    {
+                        continue;
+                    }
+
+                    if (Vector2.DistanceSquared(blocker.Position, position) < blockingRadiusSquared)
+                    {
+                        return true;
+                    }
+                }
+            }
         }
 
         return false;

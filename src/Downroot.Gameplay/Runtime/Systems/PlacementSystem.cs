@@ -30,7 +30,7 @@ public sealed class PlacementSystem(GameRuntime runtime, WorldRuntimeFacade worl
         }
 
         var placeableDef = runtime.Content.Placeables.Get(itemDef.PlaceableId.Value);
-        worldFacade.GetActiveWorld().AddRuntimeEntity(new WorldEntityState(
+        worldFacade.AddRuntimeEntity(runtime.ActiveWorldSpaceKind, new WorldEntityState(
             WorldEntityKind.Placeable,
             placeableDef.Id,
             tile,

@@ -6,6 +6,8 @@ namespace Downroot.Gameplay.Runtime.Systems;
 
 public sealed class MovementSystem(GameRuntime runtime, WorldRuntimeFacade worldFacade)
 {
+    private const float BlockingRadius = 18f;
+
     public void UpdatePlayerMovement(float deltaSeconds, Vector2 movement)
     {
         var direction = NormalizeMovement(movement);
@@ -56,7 +58,7 @@ public sealed class MovementSystem(GameRuntime runtime, WorldRuntimeFacade world
             }
         }
 
-        return world.IsBlocked(tile, ignoreEntityId);
+        return world.IsBlocked(position, BlockingRadius, ignoreEntityId);
     }
 
     public Vector2 ClampToWorldBounds(Vector2 position)
