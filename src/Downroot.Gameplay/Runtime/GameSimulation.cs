@@ -34,7 +34,7 @@ public sealed class GameSimulation
         _worldStreamingSystem = new WorldStreamingSystem(runtime, _worldFacade);
         _movementSystem = new MovementSystem(runtime, _worldFacade, _worldQuery);
         _portalTravelSystem = new PortalTravelSystem(runtime, _worldFacade, _worldStreamingSystem, _movementSystem);
-        _interactionSystem = new InteractionSystem(runtime, _worldQuery, _portalTravelSystem);
+        _interactionSystem = new InteractionSystem(runtime, _worldFacade, _worldQuery, _portalTravelSystem);
         _placementSystem = new PlacementSystem(runtime, _worldFacade, _worldQuery, _movementSystem);
         _destroySystem = new DestroySystem(runtime, _worldFacade, _worldQuery);
         _craftingSystem = new CraftingSystem(runtime, _worldQuery);

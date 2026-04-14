@@ -58,7 +58,7 @@ public sealed class MovementSystem(GameRuntime runtime, WorldRuntimeFacade world
             }
         }
 
-        return worldQuery.GetActiveEntities()
+        return worldQuery.EnumerateActiveEntities()
             .Where(entity => !entity.Removed && entity.Id != ignoreEntityId)
             .Any(entity =>
             {

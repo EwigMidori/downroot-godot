@@ -8,7 +8,7 @@ public sealed class CreatureSystem(GameRuntime runtime, WorldQueryService worldQ
     {
         var isNight = runtime.WorldState.IsNight(runtime.BootstrapConfig.DayLengthSeconds);
 
-        foreach (var creature in worldQuery.GetActiveEntities().Where(entity => entity.Kind == WorldEntityKind.Creature && !entity.Removed))
+        foreach (var creature in worldQuery.EnumerateActiveEntities().Where(entity => entity.Kind == WorldEntityKind.Creature && !entity.Removed))
         {
             var def = runtime.Content.Creatures.Get(creature.DefinitionId);
             var distance = Vector2.Distance(creature.Position, runtime.Player.Position);

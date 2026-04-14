@@ -8,6 +8,7 @@ namespace Downroot.Gameplay.Runtime.Systems;
 
 public sealed class InteractionSystem(
     GameRuntime runtime,
+    WorldRuntimeFacade worldFacade,
     WorldQueryService worldQuery,
     PortalTravelSystem portalTravelSystem)
 {
@@ -21,7 +22,7 @@ public sealed class InteractionSystem(
             return;
         }
 
-        var entity = worldQuery.GetActiveEntities().FirstOrDefault(candidate => !candidate.Removed && candidate.Id == activeId);
+        var entity = worldQuery.EnumerateActiveEntities().FirstOrDefault(candidate => !candidate.Removed && candidate.Id == activeId);
         if (entity is null || Vector2.Distance(entity.Position, runtime.Player.Position) > StationRange)
         {
             runtime.WorldState.ActiveStationEntityId = null;
@@ -101,7 +102,7 @@ public sealed class InteractionSystem(
 
     private void InteractPlaceable(WorldEntityState entity)
     {
-        if (IsPortalEntity(entity))
+        if (worldFacade.IsPortalEntity(entity))
         {
             portalTravelSystem.StartPortalTravel(entity);
             return;
@@ -148,7 +149,7 @@ public sealed class InteractionSystem(
 
     private InteractionContext CreatePlaceableInteractionContext(WorldEntityState entity)
     {
-        if (IsPortalEntity(entity))
+        if (worldFacade.IsPortalEntity(entity))
         {
             return new InteractionContext(entity.Id, entity.Kind, entity.DefinitionId, InteractionVerb.Use);
         }
@@ -165,27 +166,5 @@ public sealed class InteractionSystem(
         }
 
         return new InteractionContext(entity.Id, entity.Kind, entity.DefinitionId, InteractionVerb.Use);
-    }
-
-    private bool IsPortalEntity(WorldEntityState entity)
-    {
-        if (entity.Kind != WorldEntityKind.Placeable || !entity.IsNatural)
-        {
-            return false;
-        }
-
-        var portalDefId = GetPortalDefinitionId(entity.WorldSpaceKind);
-        return portalDefId is not null
-            && entity.DefinitionId == portalDefId.Value
-            && runtime.Content.PortalWorldLinks.Any(link =>
-                (link.SourceWorldSpaceKind == entity.WorldSpaceKind && link.SourcePortalChunk == entity.ChunkCoord)
-                || (link.TargetWorldSpaceKind == entity.WorldSpaceKind && link.TargetPortalChunk == entity.ChunkCoord));
-    }
-
-    private ContentId? GetPortalDefinitionId(WorldSpaceKind worldSpaceKind)
-    {
-        return runtime.Content.WorldGenPasses
-            .FirstOrDefault(pass => pass.WorldSpaceKind == worldSpaceKind && pass.PassType == WorldGenPassTypes.PortalSite)
-            ?.TargetId;
     }
 }

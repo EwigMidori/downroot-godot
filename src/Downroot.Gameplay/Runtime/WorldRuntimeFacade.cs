@@ -58,4 +58,33 @@ public sealed class WorldRuntimeFacade(GameRuntime runtime)
     {
         runtime.WorldState.RemoveDeleted();
     }
+
+    public ContentId? GetPortalDefinitionId(WorldSpaceKind worldSpaceKind)
+    {
+        return runtime.Content.WorldGenPasses
+            .FirstOrDefault(pass => pass.WorldSpaceKind == worldSpaceKind && pass.PassType == WorldGenPassTypes.PortalSite)
+            ?.TargetId;
+    }
+
+    public PortalWorldLinkDef GetPortalLink(WorldSpaceKind worldSpaceKind, ChunkCoord portalChunk)
+    {
+        return runtime.Content.PortalWorldLinks.First(link =>
+            (link.SourceWorldSpaceKind == worldSpaceKind && link.SourcePortalChunk == portalChunk)
+            || (link.TargetWorldSpaceKind == worldSpaceKind && link.TargetPortalChunk == portalChunk));
+    }
+
+    public bool IsPortalEntity(WorldEntityState entity)
+    {
+        if (entity.Kind != WorldEntityKind.Placeable || !entity.IsNatural)
+        {
+            return false;
+        }
+
+        var portalDefId = GetPortalDefinitionId(entity.WorldSpaceKind);
+        return portalDefId is not null
+            && entity.DefinitionId == portalDefId.Value
+            && runtime.Content.PortalWorldLinks.Any(link =>
+                (link.SourceWorldSpaceKind == entity.WorldSpaceKind && link.SourcePortalChunk == entity.ChunkCoord)
+                || (link.TargetWorldSpaceKind == entity.WorldSpaceKind && link.TargetPortalChunk == entity.ChunkCoord));
+    }
 }

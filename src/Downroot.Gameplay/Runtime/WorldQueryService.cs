@@ -5,6 +5,8 @@ namespace Downroot.Gameplay.Runtime;
 
 public sealed class WorldQueryService(GameRuntime runtime, WorldRuntimeFacade worldFacade)
 {
+    public IEnumerable<WorldEntityState> EnumerateActiveEntities() => worldFacade.GetActiveWorld().EnumerateLoadedEntities();
+
     public WorldEntityState? GetNearestInteractable(float range)
     {
         return EnumerateActiveEntities()
@@ -53,8 +55,6 @@ public sealed class WorldQueryService(GameRuntime runtime, WorldRuntimeFacade wo
             .ThenBy(entity => entity.Position.X)
             .ToArray();
     }
-
-    private IEnumerable<WorldEntityState> EnumerateActiveEntities() => worldFacade.GetActiveWorld().EnumerateLoadedEntities();
 
     private bool IsInteractionEligible(WorldEntityState entity)
     {

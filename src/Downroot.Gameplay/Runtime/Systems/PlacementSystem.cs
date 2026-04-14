@@ -20,7 +20,7 @@ public sealed class PlacementSystem(GameRuntime runtime, WorldRuntimeFacade worl
 
         var tileCoord = worldFacade.GetWorldTile(input.PointerWorld);
         var tile = worldFacade.GetWorldPosition(tileCoord);
-        if (worldQuery.GetActiveEntities().Any(entity => !entity.Removed && Vector2.Distance(entity.Position, tile) < 8f))
+        if (worldQuery.EnumerateActiveEntities().Any(entity => !entity.Removed && Vector2.Distance(entity.Position, tile) < 8f))
         {
             return;
         }
