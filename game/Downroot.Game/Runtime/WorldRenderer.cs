@@ -12,6 +12,10 @@ namespace Downroot.Game.Runtime;
 public sealed partial class WorldRenderer : Node2D
 {
     private const int TileSize = 32;
+    private const int TerrainLayerZ = 0;
+    private const int RaisedFeatureLayerZ = 10_000;
+    private const int GroundCoverLayerZ = 20_000;
+    private const int EntityBandLayerZ = 30_000;
 
     private readonly TextureContentLoader _textureLoader;
     private readonly PlayerAnimationFactory _animationFactory;
@@ -39,7 +43,7 @@ public sealed partial class WorldRenderer : Node2D
     {
         _runtime = runtime;
         _worldFacade = new WorldRuntimeFacade(runtime);
-        _terrainLayer = new Node2D { Name = "TerrainLayer" };
+        _terrainLayer = new Node2D { Name = "TerrainLayer", ZIndex = TerrainLayerZ };
         _entityLayer = new Node2D { Name = "EntityLayer" };
         AddChild(_terrainLayer);
         AddChild(_entityLayer);
@@ -58,6 +62,7 @@ public sealed partial class WorldRenderer : Node2D
 
         _playerBody.Position = ToGodot(_runtime.Player.Position);
         _playerBody.Velocity = ToGodot(frame.Movement * _runtime.Player.Speed);
+        _playerBody.ZIndex = ResolvePlayerZIndex();
         if (frame.Movement != NumericsVector2.Zero)
         {
             _lastFacing = ResolveFacing(frame.Movement);
@@ -133,7 +138,7 @@ public sealed partial class WorldRenderer : Node2D
             }
 
             var terrainRoot = new Node2D { Name = $"ChunkTerrain_{pair.Key.X}_{pair.Key.Y}" };
-            var raisedFeatureRoot = new Node2D { Name = $"ChunkRaised_{pair.Key.X}_{pair.Key.Y}" };
+            var raisedFeatureRoot = new Node2D { Name = $"ChunkRaised_{pair.Key.X}_{pair.Key.Y}", ZIndex = RaisedFeatureLayerZ };
             var entityRoot = new Node2D { Name = $"ChunkEntities_{pair.Key.X}_{pair.Key.Y}" };
             _terrainLayer!.AddChild(terrainRoot);
             _terrainLayer.AddChild(raisedFeatureRoot);
@@ -211,7 +216,7 @@ public sealed partial class WorldRenderer : Node2D
             Centered = false,
             Texture = ResolveRaisedFeatureTexture(raisedFeature, variantIndex),
             Position = new Vector2(tile.X * TileSize, tile.Y * TileSize),
-            ZIndex = 2
+            ZIndex = 0
         };
         visual.RaisedFeatureRoot.AddChild(sprite);
         visual.RaisedSprites[key] = sprite;
@@ -224,7 +229,8 @@ public sealed partial class WorldRenderer : Node2D
         _playerBody = new CharacterBody2D
         {
             Name = "Player",
-            Position = ToGodot(_runtime.Player.Position)
+            Position = ToGodot(_runtime.Player.Position),
+            ZIndex = ResolvePlayerZIndex()
         };
 
         _playerSprite = new AnimatedSprite2D
@@ -329,15 +335,58 @@ public sealed partial class WorldRenderer : Node2D
 
     private int ResolveZIndex(WorldEntityState entity)
     {
+        if (entity.Kind == WorldEntityKind.Placeable && _runtime!.Content.Placeables.Get(entity.DefinitionId).IsGroundCover)
+        {
+            return GroundCoverLayerZ;
+        }
+
+        return EntityBandLayerZ + (int)MathF.Floor(ResolveEntitySortY(entity));
+    }
+
+    private int ResolvePlayerZIndex()
+    {
+        return EntityBandLayerZ + (int)MathF.Floor(ResolvePlayerSortY());
+    }
+
+    private float ResolveEntitySortY(WorldEntityState entity)
+    {
         return entity.Kind switch
         {
-            WorldEntityKind.Placeable when _runtime!.Content.Placeables.Get(entity.DefinitionId).IsGroundCover => 1,
-            WorldEntityKind.Placeable => 3,
-            WorldEntityKind.ResourceNode => 4,
-            WorldEntityKind.Creature => 5,
-            WorldEntityKind.ItemDrop => 6,
-            _ => 2
+            WorldEntityKind.ResourceNode => ResolveResourceSortY(entity),
+            WorldEntityKind.Placeable => ResolvePlaceableSortY(entity),
+            WorldEntityKind.Creature => ResolveCreatureSortY(entity),
+            WorldEntityKind.ItemDrop => entity.Position.Y + ResolveItemTexture(_runtime!.Content.Items.Get(entity.DefinitionId)).GetHeight() * 0.5f,
+            _ => entity.Position.Y + TileSize
         };
+    }
+
+    private float ResolvePlayerSortY()
+    {
+        var spriteHeight = _runtime!.Content.Creatures.Get(_runtime.BootstrapConfig.PlayerCreatureId).SpriteHeight;
+        return _runtime.Player.Position.Y + spriteHeight * 0.75f;
+    }
+
+    private float ResolveResourceSortY(WorldEntityState entity)
+    {
+        var resourceDef = _runtime!.Content.ResourceNodes.Get(entity.DefinitionId);
+        return entity.Position.Y + (resourceDef.IsTree ? resourceDef.SpriteHeight * 0.75f : resourceDef.SpriteHeight);
+    }
+
+    private float ResolvePlaceableSortY(WorldEntityState entity)
+    {
+        var placeableDef = _runtime!.Content.Placeables.Get(entity.DefinitionId);
+        if (placeableDef.IsGroundCover)
+        {
+            return entity.Position.Y;
+        }
+
+        return entity.Position.Y + placeableDef.SpriteHeight;
+    }
+
+    private float ResolveCreatureSortY(WorldEntityState entity)
+    {
+        var creatureDef = _runtime!.Content.Creatures.Get(entity.DefinitionId);
+        return entity.Position.Y + creatureDef.SpriteHeight * 0.75f;
     }
 
     private static string ResolveFacing(NumericsVector2 movement)
