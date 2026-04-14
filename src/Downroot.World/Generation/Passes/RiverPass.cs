@@ -5,7 +5,7 @@ namespace Downroot.World.Generation.Passes;
 
 public sealed class RiverPass(ContentId riverTerrainId) : IWorldGenPass
 {
-    public string Name => "river";
+    public string Name => WorldGenPassTypes.River;
 
     public void Execute(IWorldGenContext context)
     {

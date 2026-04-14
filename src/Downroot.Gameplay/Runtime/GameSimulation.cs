@@ -1,23 +1,45 @@
-using System.Numerics;
 using Downroot.Core.Definitions;
+using Downroot.Core.Gameplay;
 using Downroot.Core.Ids;
 using Downroot.Core.Input;
-using Downroot.Core.World;
-using Downroot.Gameplay.Bootstrap;
+using Downroot.Gameplay.Runtime.Systems;
 
 namespace Downroot.Gameplay.Runtime;
 
-public sealed class GameSimulation(GameRuntime runtime)
+public sealed class GameSimulation
 {
-    private const float InteractionRange = 48f;
-    private const float StationRange = 56f;
-    private const float BlockingRadius = 18f;
     private const float AttackRange = 28f;
     private const int EmptyHandDamage = 1;
-    private readonly ContentId _portalId = new("basegame:portal");
-    private readonly Dictionary<WorldTileCoord, float> _raisedFeatureDamage = [];
+
+    private readonly GameRuntime _runtime;
+    private readonly WorldRuntimeFacade _worldFacade;
+    private readonly WorldQueryService _worldQuery;
+    private readonly WorldStreamingSystem _worldStreamingSystem;
+    private readonly MovementSystem _movementSystem;
+    private readonly PortalTravelSystem _portalTravelSystem;
+    private readonly InteractionSystem _interactionSystem;
+    private readonly PlacementSystem _placementSystem;
+    private readonly DestroySystem _destroySystem;
+    private readonly CraftingSystem _craftingSystem;
+    private readonly CreatureSystem _creatureSystem;
+
     private bool _previousDestroyHeld;
     private bool _suppressDestroyUntilRelease;
+
+    public GameSimulation(GameRuntime runtime)
+    {
+        _runtime = runtime;
+        _worldFacade = new WorldRuntimeFacade(runtime);
+        _worldQuery = new WorldQueryService(runtime, _worldFacade);
+        _worldStreamingSystem = new WorldStreamingSystem(runtime, _worldFacade);
+        _movementSystem = new MovementSystem(runtime, _worldFacade, _worldQuery);
+        _portalTravelSystem = new PortalTravelSystem(runtime, _worldFacade, _worldStreamingSystem, _movementSystem);
+        _interactionSystem = new InteractionSystem(runtime, _worldQuery, _portalTravelSystem);
+        _placementSystem = new PlacementSystem(runtime, _worldFacade, _worldQuery, _movementSystem);
+        _destroySystem = new DestroySystem(runtime, _worldFacade, _worldQuery);
+        _craftingSystem = new CraftingSystem(runtime, _worldQuery);
+        _creatureSystem = new CreatureSystem(runtime, _worldQuery, _movementSystem, DamagePlayer);
+    }
 
     public void Tick(float deltaSeconds, InputFrame input)
     {
@@ -26,416 +48,105 @@ public sealed class GameSimulation(GameRuntime runtime)
             _suppressDestroyUntilRelease = false;
         }
 
-        runtime.WorldState.TickStatusEvent(deltaSeconds);
+        _runtime.WorldState.TickStatusEvent(deltaSeconds);
         UpdateWorldTime(deltaSeconds);
-        if (runtime.WorldState.Travel.IsActive)
+        if (_runtime.WorldState.Travel.IsActive)
         {
-            TickTravel(deltaSeconds);
-            runtime.WorldState.RemoveDeleted();
+            _portalTravelSystem.TickTravel(deltaSeconds);
+            _worldFacade.RemoveDeleted();
             _previousDestroyHeld = input.DestroyHeld;
             return;
         }
 
-        UpdateLoadedChunks();
-        ValidateActiveStation();
-        UpdatePlayerMovement(deltaSeconds, input.Movement);
+        _worldStreamingSystem.UpdateLoadedChunks();
+        _interactionSystem.ValidateActiveStation();
+        _movementSystem.UpdatePlayerMovement(deltaSeconds, input.Movement);
         UpdateHotbarSelection(input);
-        UpdateFurnaceTask(deltaSeconds);
-        UpdateInteractionContext();
+        _craftingSystem.UpdateFurnaceTask(deltaSeconds);
+        _interactionSystem.UpdateInteractionContext();
         HandleToggles(input);
-        HandleInteract(input);
+        _interactionSystem.HandleInteract(input);
         HandleAttack(input);
         HandleConsumption(input);
-        HandlePlacement(input);
-        HandleDestroy(deltaSeconds, input);
-        UpdateCreatures(deltaSeconds);
-        ReassignRuntimeEntities();
-        UpdateInteractionContext();
-        runtime.WorldState.RemoveDeleted();
+        _placementSystem.HandlePlacement(input);
+        _destroySystem.HandleDestroy(
+            deltaSeconds,
+            input,
+            _suppressDestroyUntilRelease,
+            GetSelectedItemDef()?.MeleeDamage is > 0 && _creatureSystem.GetNearestCreature(AttackRange) is not null,
+            GetSelectedItemDef());
+        _creatureSystem.UpdateCreatures(deltaSeconds);
+        _worldStreamingSystem.ReassignRuntimeEntities();
+        _interactionSystem.UpdateInteractionContext();
+        _runtime.WorldState.RemoveDeleted();
         _previousDestroyHeld = input.DestroyHeld;
     }
 
-    public IReadOnlyList<RecipeDef> GetRecipesForWorkspace(CraftWorkspaceMode workspaceMode)
-    {
-        return workspaceMode switch
-        {
-            CraftWorkspaceMode.Handcraft => runtime.Content.Recipes.All.Where(recipe => recipe.RequiredStationKey is null).ToArray(),
-            CraftWorkspaceMode.Workbench => runtime.Content.Recipes.All.Where(recipe => recipe.RequiredStationKey == "workbench").ToArray(),
-            CraftWorkspaceMode.Furnace => runtime.Content.Recipes.All.Where(recipe => recipe.RequiredStationKey == "furnace").ToArray(),
-            _ => []
-        };
-    }
+    public IReadOnlyList<RecipeDef> GetRecipesForWorkspace(CraftWorkspaceMode workspaceMode) => _craftingSystem.GetRecipesForWorkspace(workspaceMode);
 
-    public bool Craft(ContentId recipeId)
-    {
-        return TryCraft(recipeId, out _);
-    }
+    public bool Craft(ContentId recipeId) => _craftingSystem.Craft(recipeId);
 
-    public bool TryCraft(ContentId recipeId, out string failureReason)
-    {
-        var recipe = runtime.Content.Recipes.Get(recipeId);
-        var outputs = GetRecipeOutputs(recipe);
-        if (recipe.RequiredStationKey is not null && !IsStationAvailable(recipe.RequiredStationKey))
-        {
-            failureReason = $"{recipe.DisplayName} requires a nearby workbench.";
-            PublishCraftResult(recipe, false, failureReason, new StatusEventState(StatusEventKind.StationRequired, recipe.Result.ItemId));
-            return false;
-        }
-
-        var missingIngredient = recipe.Ingredients.FirstOrDefault(ingredient => !runtime.Player.Inventory.Has(ingredient.ItemId, ingredient.Amount));
-        if (missingIngredient is not null)
-        {
-            failureReason = $"Missing {ShortName(missingIngredient.ItemId)} x{missingIngredient.Amount}.";
-            PublishCraftResult(recipe, false, failureReason, new StatusEventState(StatusEventKind.MissingIngredient, missingIngredient.ItemId, missingIngredient.Amount));
-            return false;
-        }
-
-        if (!runtime.Player.Inventory.CanAddMany(outputs, runtime.Content))
-        {
-            failureReason = $"No inventory space for {recipe.DisplayName}.";
-            PublishCraftResult(recipe, false, failureReason, new StatusEventState(StatusEventKind.InventoryFull, recipe.Result.ItemId));
-            return false;
-        }
-
-        if (recipe.CraftDurationSeconds > 0f)
-        {
-            if (runtime.WorldState.ActiveFurnaceTask is not null)
-            {
-                failureReason = "Furnace is already processing another recipe.";
-                PublishCraftResult(recipe, false, failureReason, new StatusEventState(StatusEventKind.CraftFailed, recipe.Result.ItemId));
-                return false;
-            }
-
-            if (runtime.WorldState.ActiveStationEntityId is not { } furnaceEntityId || runtime.WorldState.WorkspaceMode != CraftWorkspaceMode.Furnace)
-            {
-                failureReason = "Need an active furnace.";
-                PublishCraftResult(recipe, false, failureReason, new StatusEventState(StatusEventKind.StationRequired, recipe.Result.ItemId));
-                return false;
-            }
-
-            runtime.WorldState.ActiveFurnaceTask = new FurnaceTaskState(recipe.Id, furnaceEntityId, recipe.CraftDurationSeconds);
-            failureReason = string.Empty;
-            runtime.WorldState.SetStatusEvent(new StatusEventState(StatusEventKind.SmeltingStarted, recipe.Result.ItemId), 1.5f);
-            Console.WriteLine($"[Smelt] Started {recipe.Id.Value} at furnace {furnaceEntityId.Value}");
-            return true;
-        }
-
-        foreach (var ingredient in recipe.Ingredients)
-        {
-            runtime.Player.Inventory.TryConsume(ingredient.ItemId, ingredient.Amount);
-        }
-
-        foreach (var output in outputs)
-        {
-            if (!runtime.Player.Inventory.TryAdd(output.ItemId, output.Amount, runtime.Content))
-            {
-                failureReason = $"Failed to add {recipe.DisplayName} to inventory.";
-                PublishCraftResult(recipe, false, failureReason, new StatusEventState(StatusEventKind.CraftFailed, recipe.Result.ItemId));
-                return false;
-            }
-        }
-
-        failureReason = string.Empty;
-        PublishCraftResult(recipe, true, $"Crafted {recipe.DisplayName}.", new StatusEventState(StatusEventKind.CraftedItem, recipe.Result.ItemId, recipe.Result.Amount));
-        return true;
-    }
-
-    private void UpdateLoadedChunks()
-    {
-        var world = runtime.WorldState.GetActiveWorld();
-        var centerChunk = runtime.GetChunkCoord(runtime.Player.Position);
-        var desired = new HashSet<ChunkCoord>();
-
-        for (var y = centerChunk.Y - world.LoadRadius; y <= centerChunk.Y + world.LoadRadius; y++)
-        {
-            for (var x = centerChunk.X - world.LoadRadius; x <= centerChunk.X + world.LoadRadius; x++)
-            {
-                var coord = new ChunkCoord(x, y);
-                if (!world.ContainsChunk(coord))
-                {
-                    continue;
-                }
-
-                desired.Add(coord);
-                if (world.LoadedChunks.ContainsKey(coord))
-                {
-                    continue;
-                }
-
-                var generated = runtime.GetWorldGenerator(world.WorldSpaceKind)
-                    .GenerateChunk(world.WorldSpaceKind, world.WorldSeed, coord, runtime.ChunkWidth, runtime.ChunkHeight);
-                world.LoadChunk(generated, chunk => GameBootstrapper.CreateChunkRuntimeState(runtime, chunk));
-            }
-        }
-
-        foreach (var staleChunk in world.LoadedChunks.Keys.Where(coord => !desired.Contains(coord)).ToArray())
-        {
-            world.UnloadChunk(staleChunk);
-        }
-
-        runtime.WorldState.RefreshEntityProjection();
-    }
-
-    private void TickTravel(float deltaSeconds)
-    {
-        var travel = runtime.WorldState.Travel;
-        travel.PhaseRemainingSeconds = Math.Max(0f, travel.PhaseRemainingSeconds - deltaSeconds);
-        if (travel.PhaseRemainingSeconds > 0f)
-        {
-            return;
-        }
-
-        switch (travel.Phase)
-        {
-            case WorldTravelPhase.FadingOut:
-                travel.Phase = WorldTravelPhase.Switching;
-                travel.PhaseRemainingSeconds = 0.05f;
-                PerformWorldSwitch();
-                break;
-            case WorldTravelPhase.Switching:
-                travel.Phase = WorldTravelPhase.FadingIn;
-                travel.PhaseRemainingSeconds = 0.25f;
-                break;
-            case WorldTravelPhase.FadingIn:
-                travel.Reset();
-                break;
-        }
-    }
-
-    private void PerformWorldSwitch()
-    {
-        if (runtime.WorldState.Travel.TargetWorldSpaceKind == runtime.WorldState.Travel.SourceWorldSpaceKind)
-        {
-            throw new InvalidOperationException("Portal travel must switch to a different world space.");
-        }
-
-        runtime.ActiveWorldSpaceKind = runtime.WorldState.Travel.TargetWorldSpaceKind;
-        var activeWorld = runtime.WorldState.GetActiveWorld();
-        if (runtime.ActiveWorldSpaceKind == WorldSpaceKind.DimShardPocket)
-        {
-            if (ReferenceEquals(activeWorld, runtime.Overworld)
-                || activeWorld.Model.WorldSpaceKind != WorldSpaceKind.DimShardPocket
-                || activeWorld.Model.StableId == "overworld"
-                || activeWorld.WorldSeed == runtime.Overworld.WorldSeed)
-            {
-                throw new InvalidOperationException("DimShardPocket travel must activate the independent pocket world container.");
-            }
-        }
-
-        runtime.WorldState.WorkspaceMode = CraftWorkspaceMode.Hidden;
-        runtime.WorldState.ActiveStationEntityId = null;
-        runtime.WorldState.ActiveStationKey = null;
-        UpdateLoadedChunksForWorld(activeWorld, runtime.WorldState.Travel.TargetPortalTile);
-        runtime.Player.Position = FindPortalLandingPosition(activeWorld, runtime.WorldState.Travel.TargetPortalTile);
-        runtime.WorldState.RefreshEntityProjection();
-        runtime.WorldState.SetStatusEvent(
-            runtime.ActiveWorldSpaceKind == WorldSpaceKind.Overworld
-                ? new StatusEventState(StatusEventKind.ReturnedThroughPortal)
-                : new StatusEventState(StatusEventKind.EnteredPortal),
-            1.5f);
-    }
-
-    private void UpdateLoadedChunksForWorld(LoadedWorldState world, WorldTileCoord aroundTile)
-    {
-        var currentWorld = runtime.ActiveWorldSpaceKind;
-        var savedPosition = runtime.Player.Position;
-        runtime.ActiveWorldSpaceKind = world.WorldSpaceKind;
-        runtime.Player.Position = runtime.GetWorldPosition(aroundTile);
-        UpdateLoadedChunks();
-        runtime.Player.Position = savedPosition;
-        runtime.ActiveWorldSpaceKind = currentWorld;
-        runtime.WorldState.RefreshEntityProjection();
-    }
-
-    private Vector2 FindPortalLandingPosition(LoadedWorldState world, WorldTileCoord portalTile)
-    {
-        var candidates = new[]
-        {
-            portalTile,
-            new WorldTileCoord(portalTile.X, portalTile.Y + 1),
-            new WorldTileCoord(portalTile.X + 1, portalTile.Y),
-            new WorldTileCoord(portalTile.X - 1, portalTile.Y),
-            new WorldTileCoord(portalTile.X, portalTile.Y - 1)
-        };
-
-        foreach (var candidate in candidates)
-        {
-            if (!world.ContainsChunk(candidate.ToChunkCoord(runtime.ChunkWidth, runtime.ChunkHeight)))
-            {
-                continue;
-            }
-
-            var position = runtime.GetWorldPosition(candidate);
-            if (!IsBlocked(position))
-            {
-                return position;
-            }
-        }
-
-        return runtime.GetWorldPosition(portalTile);
-    }
-
-    private void UpdatePlayerMovement(float deltaSeconds, Vector2 movement)
-    {
-        if (movement != Vector2.Zero)
-        {
-            var normalized = Vector2.Normalize(movement);
-            runtime.Player.Facing = normalized;
-            runtime.Player.Position = MoveWithCollision(runtime.Player.Position, normalized * runtime.Player.Speed * deltaSeconds);
-        }
-    }
+    public bool TryCraft(ContentId recipeId, out string failureReason) => _craftingSystem.TryCraft(recipeId, out failureReason);
 
     private void UpdateHotbarSelection(InputFrame input)
     {
         if (input.DirectHotbarSlot is { } directIndex)
         {
-            runtime.Player.SelectedHotbarIndex = Math.Clamp(directIndex, 0, runtime.Player.HotbarSize - 1);
+            _runtime.Player.SelectedHotbarIndex = Math.Clamp(directIndex, 0, _runtime.Player.HotbarSize - 1);
         }
 
         if (input.HotbarScrollDelta != 0)
         {
-            var next = runtime.Player.SelectedHotbarIndex + input.HotbarScrollDelta;
-            runtime.Player.SelectedHotbarIndex = ((next % runtime.Player.HotbarSize) + runtime.Player.HotbarSize) % runtime.Player.HotbarSize;
+            var next = _runtime.Player.SelectedHotbarIndex + input.HotbarScrollDelta;
+            _runtime.Player.SelectedHotbarIndex = ((next % _runtime.Player.HotbarSize) + _runtime.Player.HotbarSize) % _runtime.Player.HotbarSize;
         }
     }
 
     private void UpdateWorldTime(float deltaSeconds)
     {
-        runtime.WorldState.TotalElapsedSeconds += deltaSeconds;
-        runtime.WorldState.TimeOfDaySeconds += deltaSeconds;
+        _runtime.WorldState.TotalElapsedSeconds += deltaSeconds;
+        _runtime.WorldState.TimeOfDaySeconds += deltaSeconds;
 
-        if (runtime.WorldState.TimeOfDaySeconds >= runtime.BootstrapConfig.DayLengthSeconds)
+        if (_runtime.WorldState.TimeOfDaySeconds >= _runtime.BootstrapConfig.DayLengthSeconds)
         {
-            runtime.WorldState.TimeOfDaySeconds -= runtime.BootstrapConfig.DayLengthSeconds;
+            _runtime.WorldState.TimeOfDaySeconds -= _runtime.BootstrapConfig.DayLengthSeconds;
         }
 
-        if (runtime.WorldState.TotalElapsedSeconds % 3f < deltaSeconds)
+        if (_runtime.WorldState.TotalElapsedSeconds % 3f < deltaSeconds)
         {
-            runtime.Player.Survival.DrainHunger(1);
-            if (runtime.Player.Survival.Hunger == 0)
+            _runtime.Player.Survival.DrainHunger(1);
+            if (_runtime.Player.Survival.Hunger == 0)
             {
                 DamagePlayer(1);
             }
         }
     }
 
-    private void UpdateFurnaceTask(float deltaSeconds)
-    {
-        var task = runtime.WorldState.ActiveFurnaceTask;
-        if (task is null)
-        {
-            return;
-        }
-
-        var furnace = runtime.WorldState.Entities.FirstOrDefault(entity => !entity.Removed && entity.Id == task.FurnaceEntityId);
-        if (furnace is null)
-        {
-            runtime.WorldState.ActiveFurnaceTask = null;
-            return;
-        }
-
-        task.ElapsedSeconds += deltaSeconds;
-        if (task.ElapsedSeconds < task.DurationSeconds)
-        {
-            return;
-        }
-
-        var recipe = runtime.Content.Recipes.Get(task.RecipeId);
-        var outputs = GetRecipeOutputs(recipe);
-        var missingIngredient = recipe.Ingredients.FirstOrDefault(ingredient => !runtime.Player.Inventory.Has(ingredient.ItemId, ingredient.Amount));
-        if (missingIngredient is not null)
-        {
-            runtime.WorldState.ActiveFurnaceTask = null;
-            runtime.WorldState.SetStatusEvent(new StatusEventState(StatusEventKind.MissingIngredient, missingIngredient.ItemId, missingIngredient.Amount));
-            Console.WriteLine($"[Smelt][Blocked] {recipe.Id.Value}: missing {missingIngredient.ItemId.Value} x{missingIngredient.Amount}");
-            return;
-        }
-
-        if (!runtime.Player.Inventory.CanAddMany(outputs, runtime.Content))
-        {
-            runtime.WorldState.ActiveFurnaceTask = null;
-            runtime.WorldState.SetStatusEvent(new StatusEventState(StatusEventKind.InventoryFull, recipe.Result.ItemId));
-            Console.WriteLine($"[Smelt][Blocked] {recipe.Id.Value}: inventory full");
-            return;
-        }
-
-        foreach (var ingredient in recipe.Ingredients)
-        {
-            runtime.Player.Inventory.TryConsume(ingredient.ItemId, ingredient.Amount);
-        }
-
-        foreach (var output in outputs)
-        {
-            runtime.Player.Inventory.TryAdd(output.ItemId, output.Amount, runtime.Content);
-        }
-
-        runtime.WorldState.ActiveFurnaceTask = null;
-        runtime.WorldState.SetStatusEvent(new StatusEventState(StatusEventKind.SmeltingCompleted, recipe.Result.ItemId, recipe.Result.Amount));
-        Console.WriteLine($"[Smelt] Completed {recipe.Id.Value}");
-    }
-
-    private void UpdateInteractionContext()
-    {
-        runtime.WorldState.CurrentInteraction = GetNearestInteractable() switch
-        {
-            null => null,
-            { Kind: WorldEntityKind.ResourceNode } entity => CreateResourceInteractionContext(entity),
-            { Kind: WorldEntityKind.Placeable } entity => CreatePlaceableInteractionContext(entity),
-            { Kind: WorldEntityKind.ItemDrop } entity => new InteractionContext(entity.Id, entity.Kind, entity.DefinitionId, InteractionVerb.PickUp),
-            _ => null
-        };
-    }
-
     private void HandleToggles(InputFrame input)
     {
-        if (input.CraftPressed)
-        {
-            if (runtime.WorldState.WorkspaceMode != CraftWorkspaceMode.Hidden)
-            {
-                runtime.WorldState.WorkspaceMode = CraftWorkspaceMode.Hidden;
-                runtime.WorldState.ActiveStationKey = null;
-                runtime.WorldState.ActiveStationEntityId = null;
-                return;
-            }
-
-            if (TryGetNearbyWorkbench(out var station))
-            {
-                var stationDef = runtime.Content.Placeables.Get(station.DefinitionId);
-                runtime.WorldState.ActiveStationKey = stationDef.CraftingStationKey;
-                runtime.WorldState.ActiveStationEntityId = station.Id;
-                runtime.WorldState.WorkspaceMode = CraftWorkspaceMode.Workbench;
-                return;
-            }
-
-            runtime.WorldState.WorkspaceMode = CraftWorkspaceMode.Handcraft;
-        }
-    }
-
-    private void HandleInteract(InputFrame input)
-    {
-        if (!input.InteractPressed)
+        if (!input.CraftPressed)
         {
             return;
         }
 
-        var target = GetNearestInteractable();
-        if (target is null)
+        if (_runtime.WorldState.WorkspaceMode != CraftWorkspaceMode.Hidden)
         {
+            _runtime.WorldState.WorkspaceMode = CraftWorkspaceMode.Hidden;
+            _runtime.WorldState.ActiveStationKind = null;
+            _runtime.WorldState.ActiveStationEntityId = null;
             return;
         }
 
-        switch (target.Kind)
+        if (_interactionSystem.TryGetNearbyStation(CraftingStationKind.Workbench, out var station))
         {
-            case WorldEntityKind.ResourceNode:
-                InteractResourceNode(target);
-                break;
-            case WorldEntityKind.Placeable:
-                InteractPlaceable(target);
-                break;
-            case WorldEntityKind.ItemDrop:
-                PickupDrop(target);
-                break;
+            var stationDef = _runtime.Content.Placeables.Get(station.DefinitionId);
+            _runtime.WorldState.ActiveStationKind = stationDef.CraftingStationKind;
+            _runtime.WorldState.ActiveStationEntityId = station.Id;
+            _runtime.WorldState.WorkspaceMode = CraftWorkspaceMode.Workbench;
+            return;
         }
+
+        _runtime.WorldState.WorkspaceMode = CraftWorkspaceMode.Handcraft;
     }
 
     private void HandleConsumption(InputFrame input)
@@ -445,8 +156,8 @@ public sealed class GameSimulation(GameRuntime runtime)
             return;
         }
 
-        var slot = runtime.Player.Inventory.Slots[runtime.Player.SelectedHotbarIndex];
-        if (slot.ItemId is null || !runtime.Content.Items.TryGet(slot.ItemId.Value, out var itemDef))
+        var slot = _runtime.Player.Inventory.Slots[_runtime.Player.SelectedHotbarIndex];
+        if (slot.ItemId is null || !_runtime.Content.Items.TryGet(slot.ItemId.Value, out var itemDef))
         {
             return;
         }
@@ -459,12 +170,12 @@ public sealed class GameSimulation(GameRuntime runtime)
         slot.Remove(1);
         if (itemDef.HungerRestore > 0)
         {
-            runtime.Player.Survival.RestoreHunger(itemDef.HungerRestore);
+            _runtime.Player.Survival.RestoreHunger(itemDef.HungerRestore);
         }
 
         if (itemDef.HealthRestore > 0)
         {
-            runtime.Player.Survival.Heal(itemDef.HealthRestore);
+            _runtime.Player.Survival.Heal(itemDef.HealthRestore);
         }
     }
 
@@ -476,7 +187,7 @@ public sealed class GameSimulation(GameRuntime runtime)
             return;
         }
 
-        var target = GetNearestCreature(AttackRange);
+        var target = _creatureSystem.GetNearestCreature(AttackRange);
         if (target is null)
         {
             return;
@@ -486,688 +197,19 @@ public sealed class GameSimulation(GameRuntime runtime)
         var damage = selectedItem?.MeleeDamage is > 0
             ? selectedItem.MeleeDamage
             : EmptyHandDamage;
-        DamageCreature(target, damage);
+        _creatureSystem.DamageCreature(target, damage);
         _suppressDestroyUntilRelease = true;
-    }
-
-    private void HandlePlacement(InputFrame input)
-    {
-        if (!input.PlacePressed)
-        {
-            return;
-        }
-
-        var slot = runtime.Player.Inventory.Slots[runtime.Player.SelectedHotbarIndex];
-        if (slot.ItemId is null || !runtime.Content.Items.TryGet(slot.ItemId.Value, out var itemDef) || itemDef!.PlaceableId is null)
-        {
-            return;
-        }
-
-        var tileCoord = runtime.GetWorldTile(input.PointerWorld);
-        var tile = runtime.GetWorldPosition(tileCoord);
-        if (runtime.WorldState.Entities.Any(entity => !entity.Removed && Vector2.Distance(entity.Position, tile) < 8f))
-        {
-            return;
-        }
-
-        if (IsBlocked(tile))
-        {
-            return;
-        }
-
-        var placeableDef = runtime.Content.Placeables.Get(itemDef.PlaceableId.Value);
-        runtime.WorldState.GetActiveWorld().AddRuntimeEntity(new WorldEntityState(
-            WorldEntityKind.Placeable,
-            placeableDef.Id,
-            tile,
-            placeableDef.MaxDurability,
-            runtime.ActiveWorldSpaceKind,
-            tileCoord.ToChunkCoord(runtime.ChunkWidth, runtime.ChunkHeight)));
-        runtime.WorldState.RefreshEntityProjection();
-        slot.Remove(1);
-    }
-
-    private void HandleDestroy(float deltaSeconds, InputFrame input)
-    {
-        if (_suppressDestroyUntilRelease)
-        {
-            runtime.WorldState.ActiveDestroyProgress = null;
-            return;
-        }
-
-        if (GetSelectedItemDef()?.MeleeDamage is > 0 && GetNearestCreature(AttackRange) is not null)
-        {
-            runtime.WorldState.ActiveDestroyProgress = null;
-            return;
-        }
-
-        var target = GetNearestDestroyTarget();
-        if (target is null || !input.DestroyHeld)
-        {
-            runtime.WorldState.ActiveDestroyProgress = null;
-            return;
-        }
-
-        var breakDuration = GetBreakDuration(target);
-        var progressValue = target.IsRaisedFeature
-            ? AddRaisedFeatureDamage(target.Tile, deltaSeconds)
-            : AddEntityDamage(target.Entity!, deltaSeconds);
-        var progress = Math.Clamp(progressValue / breakDuration, 0f, 1f);
-        runtime.WorldState.ActiveDestroyProgress = new DestroyProgressState(
-            target.Entity?.Id,
-            target.Entity?.Kind,
-            target.IsRaisedFeature,
-            target.Tile,
-            target.ContentId,
-            runtime.GetWorldPosition(target.Tile),
-            progress);
-        if (progressValue < breakDuration)
-        {
-            return;
-        }
-
-        DestroyTarget(target);
-        runtime.WorldState.ActiveDestroyProgress = null;
-    }
-
-    private void UpdateCreatures(float deltaSeconds)
-    {
-        var isNight = runtime.WorldState.IsNight(runtime.BootstrapConfig.DayLengthSeconds);
-
-        foreach (var creature in runtime.WorldState.Entities.Where(entity => entity.Kind == WorldEntityKind.Creature && !entity.Removed))
-        {
-            var def = runtime.Content.Creatures.Get(creature.DefinitionId);
-            var distance = Vector2.Distance(creature.Position, runtime.Player.Position);
-
-            if (!isNight && def.DayFleeStartRange > 0f)
-            {
-                if (distance <= def.DayFleeStartRange)
-                {
-                    creature.OpenState = true;
-                }
-                else if (distance >= def.DayFleeStopRange)
-                {
-                    creature.OpenState = false;
-                }
-
-                if (creature.OpenState && distance > 0f)
-                {
-                    var fleeDirection = Vector2.Normalize(creature.Position - runtime.Player.Position);
-                    creature.Position = MoveWithCollision(creature.Position, fleeDirection * def.MoveSpeed * deltaSeconds, creature.Id);
-                }
-                continue;
-            }
-
-            var chase = (def.NightOnlyAggro && isNight) || (def.NightAggroRange > 0f && isNight && distance <= def.NightAggroRange);
-            if (!chase)
-            {
-                continue;
-            }
-
-            var direction = runtime.Player.Position - creature.Position;
-            if (direction != Vector2.Zero)
-            {
-                creature.Position = MoveWithCollision(creature.Position, Vector2.Normalize(direction) * def.MoveSpeed * deltaSeconds, creature.Id);
-            }
-
-            creature.AiAccumulator += deltaSeconds;
-            if (Vector2.Distance(creature.Position, runtime.Player.Position) < 18f && creature.AiAccumulator >= def.ContactDamageCooldownSeconds)
-            {
-                DamagePlayer(def.ContactDamage);
-                creature.AiAccumulator = 0f;
-            }
-        }
-    }
-
-    private DestroyTarget? GetNearestRaisedFeatureTarget()
-    {
-        var world = runtime.WorldState.GetActiveWorld();
-        var centerTile = runtime.GetWorldTile(runtime.Player.Position);
-        var tileRadius = (int)MathF.Ceiling(InteractionRange / 32f);
-        DestroyTarget? best = null;
-        var bestDistance = float.MaxValue;
-
-        for (var y = centerTile.Y - tileRadius; y <= centerTile.Y + tileRadius; y++)
-        {
-            for (var x = centerTile.X - tileRadius; x <= centerTile.X + tileRadius; x++)
-            {
-                var tile = new WorldTileCoord(x, y);
-                var featureId = world.GetRaisedFeatureId(tile, runtime.ChunkWidth, runtime.ChunkHeight);
-                if (featureId is null)
-                {
-                    continue;
-                }
-
-                var distance = Vector2.Distance(runtime.GetWorldPosition(tile), runtime.Player.Position);
-                if (distance > InteractionRange || distance >= bestDistance)
-                {
-                    continue;
-                }
-
-                bestDistance = distance;
-                best = new DestroyTarget(
-                    true,
-                    tile,
-                    featureId.Value,
-                    runtime.ActiveWorldSpaceKind,
-                    tile.ToChunkCoord(runtime.ChunkWidth, runtime.ChunkHeight));
-            }
-        }
-
-        return best;
-    }
-
-    private float AddEntityDamage(WorldEntityState entity, float deltaSeconds)
-    {
-        entity.DamageAccumulator += deltaSeconds;
-        return entity.DamageAccumulator;
-    }
-
-    private float AddRaisedFeatureDamage(WorldTileCoord tile, float deltaSeconds)
-    {
-        var current = _raisedFeatureDamage.GetValueOrDefault(tile);
-        current += deltaSeconds;
-        _raisedFeatureDamage[tile] = current;
-        return current;
-    }
-
-    private WorldEntityState? GetNearestInteractable()
-    {
-        return runtime.WorldState.Entities
-            .Where(entity => !entity.Removed && IsInteractionEligible(entity))
-            .OrderBy(entity => Vector2.Distance(entity.Position, runtime.Player.Position))
-            .FirstOrDefault(entity => Vector2.Distance(entity.Position, runtime.Player.Position) <= InteractionRange);
-    }
-
-    private DestroyTarget? GetNearestDestroyTarget()
-    {
-        var raised = GetNearestRaisedFeatureTarget();
-        if (raised is not null)
-        {
-            return raised;
-        }
-
-        var entity = GetNearestDestructibleEntity();
-        return entity is null
-            ? null
-            : new DestroyTarget(false, runtime.GetWorldTile(entity.Position), entity.DefinitionId, entity.WorldSpaceKind, entity.ChunkCoord, entity);
-    }
-
-    private WorldEntityState? GetNearestDestructibleEntity()
-    {
-        return runtime.WorldState.Entities
-            .Where(entity => !entity.Removed && IsDestructible(entity))
-            .OrderBy(entity => Vector2.Distance(entity.Position, runtime.Player.Position))
-            .FirstOrDefault(entity => Vector2.Distance(entity.Position, runtime.Player.Position) <= InteractionRange);
-    }
-
-    private void InteractResourceNode(WorldEntityState entity)
-    {
-        var def = runtime.Content.ResourceNodes.Get(entity.DefinitionId);
-        if (def.DirectConsume)
-        {
-            runtime.Player.Survival.RestoreHunger(def.HungerRestore);
-            entity.Removed = true;
-            return;
-        }
-
-        if (def.InstantPickup)
-        {
-            foreach (var drop in def.Drops)
-            {
-                runtime.Player.Inventory.TryAdd(drop.ItemId, drop.Amount, runtime.Content);
-            }
-
-            entity.Removed = true;
-        }
-    }
-
-    private void InteractPlaceable(WorldEntityState entity)
-    {
-        if (entity.DefinitionId == _portalId)
-        {
-            StartPortalTravel(entity);
-            return;
-        }
-
-        var def = runtime.Content.Placeables.Get(entity.DefinitionId);
-        if (def.IsCraftingStation && def.CraftingStationKey is not null)
-        {
-            runtime.WorldState.ActiveStationKey = def.CraftingStationKey;
-            runtime.WorldState.ActiveStationEntityId = entity.Id;
-            runtime.WorldState.WorkspaceMode = def.CraftingStationKey == "furnace"
-                ? CraftWorkspaceMode.Furnace
-                : CraftWorkspaceMode.Workbench;
-        }
-        else
-        {
-            entity.OpenState = !entity.OpenState;
-        }
-    }
-
-    private void StartPortalTravel(WorldEntityState entity)
-    {
-        if (runtime.WorldState.Travel.IsActive)
-        {
-            return;
-        }
-
-        if (runtime.ActiveWorldSpaceKind == WorldSpaceKind.DimShardPocket && !runtime.DimShardPocket.LoadedChunks.ContainsKey(new ChunkCoord(0, 0)))
-        {
-            UpdateLoadedChunksForWorld(runtime.DimShardPocket, new WorldTileCoord(0, 0));
-        }
-
-        var targetWorld = runtime.ActiveWorldSpaceKind == WorldSpaceKind.Overworld
-            ? WorldSpaceKind.DimShardPocket
-            : WorldSpaceKind.Overworld;
-        var targetTile = targetWorld == WorldSpaceKind.DimShardPocket
-            ? FindPortalTile(runtime.DimShardPocket, new ChunkCoord(0, 0))
-            : FindPortalTile(runtime.Overworld, runtime.DimShardPocket.Model.SourcePortalChunk ?? new ChunkCoord(1, 0));
-
-        runtime.WorldState.Travel.SourceWorldSpaceKind = runtime.ActiveWorldSpaceKind;
-        runtime.WorldState.Travel.TargetWorldSpaceKind = targetWorld;
-        runtime.WorldState.Travel.SourcePortalChunk = entity.ChunkCoord;
-        runtime.WorldState.Travel.SourcePortalTile = runtime.GetWorldTile(entity.Position);
-        runtime.WorldState.Travel.TargetPortalTile = targetTile;
-        runtime.WorldState.Travel.Phase = WorldTravelPhase.FadingOut;
-        runtime.WorldState.Travel.PhaseRemainingSeconds = 0.25f;
-        runtime.WorldState.SetStatusEvent(
-            targetWorld == WorldSpaceKind.DimShardPocket
-                ? new StatusEventState(StatusEventKind.EnteredPortal)
-                : new StatusEventState(StatusEventKind.ReturnedThroughPortal),
-            1.25f);
-    }
-
-    private WorldTileCoord FindPortalTile(LoadedWorldState world, ChunkCoord preferredChunk)
-    {
-        if (!world.LoadedChunks.ContainsKey(preferredChunk))
-        {
-            var generated = runtime.GetWorldGenerator(world.WorldSpaceKind)
-                .GenerateChunk(world.WorldSpaceKind, world.WorldSeed, preferredChunk, runtime.ChunkWidth, runtime.ChunkHeight);
-            world.LoadChunk(generated, chunk => GameBootstrapper.CreateChunkRuntimeState(runtime, chunk));
-        }
-
-        var portal = world.LoadedChunks[preferredChunk].Entities.FirstOrDefault(candidate => candidate.DefinitionId == _portalId);
-        return portal is null ? new WorldTileCoord(0, 0) : runtime.GetWorldTile(portal.Position);
-    }
-
-    private void PickupDrop(WorldEntityState entity)
-    {
-        if (runtime.Player.Inventory.TryAdd(entity.DefinitionId, entity.StackCount, runtime.Content))
-        {
-            entity.Removed = true;
-        }
-    }
-
-    private void DestroyTarget(DestroyTarget target)
-    {
-        if (target.IsRaisedFeature)
-        {
-            DestroyRaisedFeature(target);
-            return;
-        }
-
-        DestroyEntity(target.Entity!);
-    }
-
-    private void DestroyRaisedFeature(DestroyTarget target)
-    {
-        var world = runtime.GetWorld(target.WorldSpaceKind);
-        if (!world.TryGetChunk(target.ChunkCoord, out var chunk))
-        {
-            return;
-        }
-
-        chunk.RemovedRaisedFeatureTiles.Add(target.Tile);
-        _raisedFeatureDamage.Remove(target.Tile);
-        var raisedFeature = runtime.Content.RaisedFeatures.Get(target.ContentId);
-        foreach (var drop in raisedFeature.Drops)
-        {
-            world.AddRuntimeEntity(new WorldEntityState(
-                WorldEntityKind.ItemDrop,
-                drop.ItemId,
-                runtime.GetWorldPosition(target.Tile),
-                1,
-                target.WorldSpaceKind,
-                target.ChunkCoord,
-                stackCount: drop.Amount));
-        }
-
-        world.MarkRaisedFeatureDirty(EnumerateRaisedFeatureDirtyTiles(target.Tile));
-    }
-
-    private static IEnumerable<WorldTileCoord> EnumerateRaisedFeatureDirtyTiles(WorldTileCoord origin)
-    {
-        for (var dy = -1; dy <= 1; dy++)
-        {
-            for (var dx = -1; dx <= 1; dx++)
-            {
-                yield return new WorldTileCoord(origin.X + dx, origin.Y + dy);
-            }
-        }
-    }
-
-    private void DestroyEntity(WorldEntityState entity)
-    {
-        if (runtime.WorldState.ActiveStationEntityId == entity.Id)
-        {
-            runtime.WorldState.ActiveStationEntityId = null;
-            runtime.WorldState.ActiveStationKey = null;
-            runtime.WorldState.WorkspaceMode = CraftWorkspaceMode.Hidden;
-        }
-
-        entity.Removed = true;
-
-        switch (entity.Kind)
-        {
-            case WorldEntityKind.ResourceNode:
-                var resourceDef = runtime.Content.ResourceNodes.Get(entity.DefinitionId);
-                foreach (var drop in resourceDef.Drops)
-                {
-                    var worldTile = runtime.GetWorldTile(entity.Position);
-                    runtime.GetWorld(entity.WorldSpaceKind).AddRuntimeEntity(new WorldEntityState(
-                        WorldEntityKind.ItemDrop,
-                        drop.ItemId,
-                        entity.Position,
-                        1,
-                        entity.WorldSpaceKind,
-                        worldTile.ToChunkCoord(runtime.ChunkWidth, runtime.ChunkHeight),
-                        stackCount: drop.Amount));
-                }
-                break;
-            case WorldEntityKind.Placeable:
-                var itemDef = runtime.Content.Items.All.FirstOrDefault(item => item.PlaceableId == entity.DefinitionId);
-                if (itemDef is not null)
-                {
-                    var worldTile = runtime.GetWorldTile(entity.Position);
-                    runtime.GetWorld(entity.WorldSpaceKind).AddRuntimeEntity(new WorldEntityState(
-                        WorldEntityKind.ItemDrop,
-                        itemDef.Id,
-                        entity.Position,
-                        1,
-                        entity.WorldSpaceKind,
-                        worldTile.ToChunkCoord(runtime.ChunkWidth, runtime.ChunkHeight)));
-                }
-                break;
-        }
-    }
-
-    private bool IsStationAvailable(string? stationKey)
-    {
-        if (stationKey is null)
-        {
-            return true;
-        }
-
-        ValidateActiveStation();
-        return runtime.WorldState.ActiveStationKey == stationKey && runtime.WorldState.ActiveStationEntityId is not null;
-    }
-
-    private void ValidateActiveStation()
-    {
-        if (runtime.WorldState.ActiveStationEntityId is not { } activeId)
-        {
-            return;
-        }
-
-        var entity = runtime.WorldState.Entities.FirstOrDefault(candidate => !candidate.Removed && candidate.Id == activeId);
-        if (entity is null || Vector2.Distance(entity.Position, runtime.Player.Position) > StationRange)
-        {
-            runtime.WorldState.ActiveStationEntityId = null;
-            runtime.WorldState.ActiveStationKey = null;
-            if (runtime.WorldState.WorkspaceMode is CraftWorkspaceMode.Workbench or CraftWorkspaceMode.Furnace)
-            {
-                runtime.WorldState.WorkspaceMode = CraftWorkspaceMode.Hidden;
-            }
-        }
-    }
-
-    private Vector2 MoveWithCollision(Vector2 currentPosition, Vector2 delta, Downroot.Core.Ids.EntityId? ignoreEntityId = null)
-    {
-        var desired = ClampToWorldBounds(currentPosition + delta);
-        var slideX = ClampToWorldBounds(new Vector2(desired.X, currentPosition.Y));
-        var slideY = ClampToWorldBounds(new Vector2(currentPosition.X, desired.Y));
-
-        if (!IsBlocked(desired, ignoreEntityId))
-        {
-            return desired;
-        }
-
-        if (!IsBlocked(slideX, ignoreEntityId))
-        {
-            return slideX;
-        }
-
-        if (!IsBlocked(slideY, ignoreEntityId))
-        {
-            return slideY;
-        }
-
-        return currentPosition;
-    }
-
-    private bool IsBlocked(Vector2 position, Downroot.Core.Ids.EntityId? ignoreEntityId = null)
-    {
-        var tile = runtime.GetWorldTile(position);
-        var world = runtime.WorldState.GetActiveWorld();
-        var raisedFeatureId = world.GetRaisedFeatureId(tile, runtime.ChunkWidth, runtime.ChunkHeight);
-        if (raisedFeatureId is not null)
-        {
-            var raisedFeature = runtime.Content.RaisedFeatures.Get(raisedFeatureId.Value);
-            if (raisedFeature.BlocksMovement)
-            {
-                return true;
-            }
-        }
-
-        return runtime.WorldState.Entities
-            .Where(entity => !entity.Removed && entity.Id != ignoreEntityId)
-            .Any(entity =>
-            {
-                if (entity.Kind == WorldEntityKind.Placeable)
-                {
-                    var def = runtime.Content.Placeables.Get(entity.DefinitionId);
-                    var blocks = entity.OpenState ? def.BlocksMovementWhenOpen : def.BlocksMovement;
-                    return blocks && Vector2.Distance(entity.Position, position) < BlockingRadius;
-                }
-
-                if (entity.Kind == WorldEntityKind.ResourceNode)
-                {
-                    var def = runtime.Content.ResourceNodes.Get(entity.DefinitionId);
-                    return def.BlocksMovement && Vector2.Distance(entity.Position, position) < BlockingRadius;
-                }
-
-                return false;
-            });
-    }
-
-    private Vector2 ClampToWorldBounds(Vector2 position)
-    {
-        var world = runtime.WorldState.GetActiveWorld();
-        if (world.Model.MinChunkCoord is not { } min || world.Model.MaxChunkCoord is not { } max)
-        {
-            return position;
-        }
-
-        var minTile = WorldTileCoord.FromChunkAndLocal(min, new LocalTileCoord(0, 0), runtime.ChunkWidth, runtime.ChunkHeight);
-        var maxTile = WorldTileCoord.FromChunkAndLocal(max, new LocalTileCoord(runtime.ChunkWidth - 1, runtime.ChunkHeight - 1), runtime.ChunkWidth, runtime.ChunkHeight);
-        return new Vector2(
-            Math.Clamp(position.X, minTile.X * 32f, maxTile.X * 32f),
-            Math.Clamp(position.Y, minTile.Y * 32f, maxTile.Y * 32f));
-    }
-
-    private void ReassignRuntimeEntities()
-    {
-        var world = runtime.WorldState.GetActiveWorld();
-        foreach (var sourceChunk in world.LoadedChunks.Values.ToArray())
-        {
-            foreach (var entity in sourceChunk.RuntimeEntities.Values.Where(entity => !entity.Removed).ToArray())
-            {
-                var targetChunk = runtime.GetChunkCoord(entity.Position);
-                if (targetChunk == entity.ChunkCoord || !world.ContainsChunk(targetChunk) || !world.LoadedChunks.ContainsKey(targetChunk))
-                {
-                    continue;
-                }
-
-                if (!sourceChunk.TakeRuntimeEntity(entity.Id, out _))
-                {
-                    continue;
-                }
-
-                entity.ChunkCoord = targetChunk;
-                world.LoadedChunks[targetChunk].AddRuntimeEntity(entity);
-            }
-        }
-    }
-
-    private void PublishCraftResult(RecipeDef recipe, bool success, string message, StatusEventState statusEvent)
-    {
-        var prefix = success ? "[Craft]" : "[Craft][Blocked]";
-        Console.WriteLine($"{prefix} {recipe.Id.Value}: {message}");
-        runtime.WorldState.SetStatusEvent(statusEvent);
-    }
-
-    private InteractionContext? CreateResourceInteractionContext(WorldEntityState entity)
-    {
-        var def = runtime.Content.ResourceNodes.Get(entity.DefinitionId);
-        if (def.DirectConsume)
-        {
-            return new InteractionContext(entity.Id, entity.Kind, entity.DefinitionId, InteractionVerb.Eat);
-        }
-
-        if (def.InstantPickup)
-        {
-            return new InteractionContext(entity.Id, entity.Kind, entity.DefinitionId, InteractionVerb.Gather);
-        }
-
-        return null;
-    }
-
-    private InteractionContext CreatePlaceableInteractionContext(WorldEntityState entity)
-    {
-        var def = runtime.Content.Placeables.Get(entity.DefinitionId);
-        if (def.IsCraftingStation)
-        {
-            return new InteractionContext(entity.Id, entity.Kind, entity.DefinitionId, InteractionVerb.Use);
-        }
-
-        if (def.HasOpenVariant)
-        {
-            return new InteractionContext(entity.Id, entity.Kind, entity.DefinitionId, entity.OpenState ? InteractionVerb.Close : InteractionVerb.Open);
-        }
-
-        return new InteractionContext(entity.Id, entity.Kind, entity.DefinitionId, InteractionVerb.Use);
-    }
-
-    private bool IsInteractionEligible(WorldEntityState entity)
-    {
-        return entity.Kind switch
-        {
-            WorldEntityKind.ItemDrop => true,
-            WorldEntityKind.Placeable => true,
-            WorldEntityKind.ResourceNode => IsResourceInteractionEligible(entity),
-            _ => false
-        };
-    }
-
-    private bool IsResourceInteractionEligible(WorldEntityState entity)
-    {
-        var def = runtime.Content.ResourceNodes.Get(entity.DefinitionId);
-        return def.InstantPickup || def.DirectConsume;
-    }
-
-    private bool IsDestructible(WorldEntityState entity)
-    {
-        return entity.Kind switch
-        {
-            WorldEntityKind.ResourceNode => true,
-            WorldEntityKind.Placeable => runtime.Content.Placeables.Get(entity.DefinitionId).CanBeDestroyed,
-            _ => false
-        };
-    }
-
-    private bool TryGetNearbyWorkbench(out WorldEntityState station)
-    {
-        station = runtime.WorldState.Entities
-            .Where(entity => !entity.Removed && entity.Kind == WorldEntityKind.Placeable)
-            .OrderBy(entity => Vector2.Distance(entity.Position, runtime.Player.Position))
-            .FirstOrDefault(entity =>
-            {
-                if (Vector2.Distance(entity.Position, runtime.Player.Position) > StationRange)
-                {
-                    return false;
-                }
-
-                return runtime.Content.Placeables.Get(entity.DefinitionId).CraftingStationKey == "workbench";
-            })!;
-
-        return station is not null;
-    }
-
-    private IReadOnlyList<ItemAmount> GetRecipeOutputs(RecipeDef recipe)
-    {
-        return recipe.ExtraResults is null
-            ? [recipe.Result]
-            : (new[] { recipe.Result }).Concat(recipe.ExtraResults).ToArray();
     }
 
     private ItemDef? GetSelectedItemDef()
     {
-        var slot = runtime.Player.Inventory.Slots[runtime.Player.SelectedHotbarIndex];
-        if (slot.ItemId is null || !runtime.Content.Items.TryGet(slot.ItemId.Value, out var item))
+        var slot = _runtime.Player.Inventory.Slots[_runtime.Player.SelectedHotbarIndex];
+        if (slot.ItemId is null || !_runtime.Content.Items.TryGet(slot.ItemId.Value, out var item))
         {
             return null;
         }
 
         return item;
-    }
-
-    private float GetBreakDuration(WorldEntityState target)
-    {
-        var duration = Math.Max(1, target.Durability);
-        if (target.Kind != WorldEntityKind.ResourceNode)
-        {
-            return duration;
-        }
-
-        var resourceDef = runtime.Content.ResourceNodes.Get(target.DefinitionId);
-        if (!resourceDef.IsTree)
-        {
-            return duration;
-        }
-
-        var multiplier = GetSelectedItemDef()?.TreeBreakSpeedMultiplier ?? 1f;
-        return Math.Max(0.2f, duration / Math.Max(1f, multiplier));
-    }
-
-    private float GetBreakDuration(DestroyTarget target)
-    {
-        if (!target.IsRaisedFeature)
-        {
-            return GetBreakDuration(target.Entity!);
-        }
-
-        var raisedFeature = runtime.Content.RaisedFeatures.Get(target.ContentId);
-        return Math.Max(1, raisedFeature.MaxDurability);
-    }
-
-    private WorldEntityState? GetNearestCreature(float range)
-    {
-        return runtime.WorldState.Entities
-            .Where(entity => !entity.Removed && entity.Kind == WorldEntityKind.Creature)
-            .OrderBy(entity => Vector2.Distance(entity.Position, runtime.Player.Position))
-            .FirstOrDefault(entity => Vector2.Distance(entity.Position, runtime.Player.Position) <= range);
-    }
-
-    private void DamageCreature(WorldEntityState creature, int amount)
-    {
-        creature.Durability = Math.Max(0, creature.Durability - amount);
-        creature.AiAccumulator = 0f;
-        creature.HitFlashSeconds = 0.16f;
-        if (creature.Durability <= 0)
-        {
-            creature.Removed = true;
-        }
     }
 
     private void DamagePlayer(int amount)
@@ -1177,9 +219,7 @@ public sealed class GameSimulation(GameRuntime runtime)
             return;
         }
 
-        runtime.Player.Survival.Damage(amount);
-        runtime.WorldState.PlayerHitFlashSeconds = 0.18f;
+        _runtime.Player.Survival.Damage(amount);
+        _runtime.WorldState.PlayerHitFlashSeconds = 0.18f;
     }
-
-    private static string ShortName(ContentId id) => id.Value.Split(':')[1].Replace('_', ' ');
 }

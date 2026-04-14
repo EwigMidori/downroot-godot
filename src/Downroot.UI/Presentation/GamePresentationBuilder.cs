@@ -1,5 +1,6 @@
 using Downroot.Content.Registries;
 using Downroot.Core.Definitions;
+using Downroot.Core.Gameplay;
 using Downroot.Core.Ids;
 using Downroot.Gameplay.Runtime;
 
@@ -185,7 +186,7 @@ public sealed class GamePresentationBuilder
 
     private static string ResolveItemName(ContentRegistrySet content, ContentId contentId) => content.Items.Get(contentId).DisplayName;
 
-    private static bool IsFurnaceRecipe(RecipeDef recipe) => recipe.RequiredStationKey == "furnace";
+    private static bool IsFurnaceRecipe(RecipeDef recipe) => recipe.RequiredStationKind == CraftingStationKind.Furnace;
 
     private static float ToPercent(int current, int max) => max <= 0 ? 0f : Math.Clamp((float)current / max, 0f, 1f);
 }

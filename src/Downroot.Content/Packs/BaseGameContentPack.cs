@@ -65,16 +65,22 @@ public sealed class BaseGameContentPack : IContentPack
         var goldveinRaisedId = new ContentId("basegame:goldvein_raised");
         var venomiteRaisedId = new ContentId("basegame:venomite_raised");
         var frostcoreRaisedId = new ContentId("basegame:frostcore_raised");
+        var portalLink = new PortalWorldLinkDef(
+            WorldSpaceKind.Overworld,
+            WorldSpaceKind.DimShardPocket,
+            new ChunkCoord(1, 0),
+            new ChunkCoord(0, 0),
+            "overworld-1,0-to-dimshard-0,0");
 
         registrar.RegisterTerrain(new TerrainDef(grassId, "Grass", PackId, "packs/basegame/assets/world/terrain/ground/grass.png", 32, 32, 0, 0));
         registrar.RegisterTerrain(new TerrainDef(dirtId, "Dirt", PackId, "packs/basegame/assets/world/terrain/ground/dirt.png", 32, 32, 0, 0));
         registrar.RegisterTerrain(new TerrainDef(riverWaterId, "River Water", PackId, "packs/basegame/assets/world/terrain/ground/river_water.png", 32, 32, 0, 0));
         registrar.RegisterTerrain(new TerrainDef(dimfragId, "Dimfrag", PackId, "packs/basegame/assets/world/terrain/ground/dimfrag.png", 32, 32, 0, 0));
 
-        registrar.RegisterPlaceable(new PlaceableDef(furnacePlaceableId, "Furnace", PackId, "packs/basegame/assets/production/utility/furnace.png", 32, 32, 0, 0, 5, true, "furnace", true));
+        registrar.RegisterPlaceable(new PlaceableDef(furnacePlaceableId, "Furnace", PackId, "packs/basegame/assets/production/utility/furnace.png", 32, 32, 0, 0, 5, true, CraftingStationKind.Furnace, true));
         registrar.RegisterPlaceable(new PlaceableDef(stoneWallPlaceableId, "Stone Wall", PackId, "packs/basegame/assets/structures/walls/stone_wall.png", 32, 32, 0, 0, 5, false, null, true));
         registrar.RegisterPlaceable(new PlaceableDef(stoneFloorPlaceableId, "Stone Floor", PackId, "packs/basegame/assets/world/terrain/floors/stone_floor.png", 32, 32, 0, 0, 2, false, null, false, false, 0, 0, false, true));
-        registrar.RegisterPlaceable(new PlaceableDef(workbenchPlaceableId, "Workbench", PackId, "packs/basegame/assets/production/workstations/workbench.png", 28, 32, 0, 0, 3, true, "workbench", true));
+        registrar.RegisterPlaceable(new PlaceableDef(workbenchPlaceableId, "Workbench", PackId, "packs/basegame/assets/production/workstations/workbench.png", 28, 32, 0, 0, 3, true, CraftingStationKind.Workbench, true));
         registrar.RegisterPlaceable(new PlaceableDef(torchPlaceableId, "Torch", PackId, "packs/basegame/assets/items/torch.png", 16, 16, 0, 0, 1));
         registrar.RegisterPlaceable(new PlaceableDef(chestPlaceableId, "Wooden Chest", PackId, "packs/basegame/assets/production/storage/wooden_chest.png", 32, 32, 0, 0, 3, false, null, true, true, 1, 0, true));
         registrar.RegisterPlaceable(new PlaceableDef(doorPlaceableId, "Wooden Door", PackId, "packs/basegame/assets/structures/doors/wood_door_close_open.png", 32, 32, 0, 0, 3, false, null, true, true, 1, 0, false));
@@ -113,25 +119,30 @@ public sealed class BaseGameContentPack : IContentPack
         registrar.RegisterRaisedFeature(new RaisedFeatureDef(goldveinRaisedId, "Goldvein", PackId, "packs/basegame/assets/world/nature/ores/goldvein.png", 32, 32, 13, 4, [new ItemAmount(goldveinItemId, 1)]));
         registrar.RegisterRaisedFeature(new RaisedFeatureDef(venomiteRaisedId, "Venomite", PackId, "packs/basegame/assets/world/nature/ores/venomite.png", 32, 32, 13, 4, [new ItemAmount(venomiteItemId, 1)]));
         registrar.RegisterRaisedFeature(new RaisedFeatureDef(frostcoreRaisedId, "Frostcore", PackId, "packs/basegame/assets/world/nature/ores/frostcore.png", 32, 32, 13, 5, [new ItemAmount(frostcoreItemId, 1)]));
+        registrar.RegisterPortalWorldLink(portalLink);
+        registrar.RegisterRaisedOreFieldRule(new RaisedOreFieldRuleDef(voiditeRaisedId, WorldSpaceKind.Overworld, SurfaceRegions.DirtField, 0.48f, true, [voiditeRaisedId, goldveinRaisedId, venomiteRaisedId]));
+        registrar.RegisterRaisedOreFieldRule(new RaisedOreFieldRuleDef(goldveinRaisedId, WorldSpaceKind.Overworld, SurfaceRegions.DirtField, 0.48f, true, [voiditeRaisedId, goldveinRaisedId, venomiteRaisedId]));
+        registrar.RegisterRaisedOreFieldRule(new RaisedOreFieldRuleDef(venomiteRaisedId, WorldSpaceKind.Overworld, SurfaceRegions.DirtField, 0.48f, true, [voiditeRaisedId, goldveinRaisedId, venomiteRaisedId]));
+        registrar.RegisterRaisedOreFieldRule(new RaisedOreFieldRuleDef(frostcoreRaisedId, WorldSpaceKind.DimShardPocket, SurfaceRegions.DimShardField, 0.24f, false, [frostcoreRaisedId]));
 
         registrar.RegisterCreature(new CreatureDef(playerId, "Human", PackId, "packs/basegame/assets/characters/humans/default/idle.png", "packs/basegame/assets/characters/humans/default/run.png", null, 64, 64, 140f));
         registrar.RegisterCreature(new CreatureDef(wormId, "Worm", PackId, "packs/basegame/assets/world/nature/plants/worm.png", "packs/basegame/assets/world/nature/plants/worm.png", "packs/basegame/assets/world/nature/plants/worm.png", 16, 16, 28f, 4, true, 1));
         registrar.RegisterCreature(new CreatureDef(cockroachId, "Cockroach", PackId, "packs/basegame/assets/world/nature/plants/cockroach.png", "packs/basegame/assets/world/nature/plants/cockroach.png", "packs/basegame/assets/world/nature/plants/cockroach.png", 16, 16, 34f, 1, false, 2, 128f, 192f, 160f, 1f));
 
-        registrar.RegisterRecipe(new RecipeDef(new ContentId("basegame:craft_workbench"), "Workbench", PackId, [new ItemAmount(logItemId, 4), new ItemAmount(stoneItemId, 1)], new ItemAmount(workbenchItemId, 1)));
-        registrar.RegisterRecipe(new RecipeDef(new ContentId("basegame:craft_torch"), "Torch", PackId, [new ItemAmount(logItemId, 1), new ItemAmount(stoneItemId, 1)], new ItemAmount(torchItemId, 1)));
-        registrar.RegisterRecipe(new RecipeDef(new ContentId("basegame:craft_chest"), "Wooden Chest", PackId, [new ItemAmount(logItemId, 6)], new ItemAmount(chestItemId, 1), "workbench"));
-        registrar.RegisterRecipe(new RecipeDef(new ContentId("basegame:craft_door"), "Wooden Door", PackId, [new ItemAmount(logItemId, 4)], new ItemAmount(doorItemId, 1), "workbench"));
-        registrar.RegisterRecipe(new RecipeDef(new ContentId("basegame:craft_fence"), "Wooden Fence", PackId, [new ItemAmount(logItemId, 2)], new ItemAmount(fenceItemId, 2), "workbench"));
-        registrar.RegisterRecipe(new RecipeDef(new ContentId("basegame:craft_furnace"), "Furnace", PackId, [new ItemAmount(stoneItemId, 4)], new ItemAmount(furnaceItemId, 1), "workbench"));
-        registrar.RegisterRecipe(new RecipeDef(new ContentId("basegame:craft_stone_wall"), "Stone Wall", PackId, [new ItemAmount(stoneItemId, 2)], new ItemAmount(stoneWallItemId, 1), "workbench"));
-        registrar.RegisterRecipe(new RecipeDef(new ContentId("basegame:craft_stone_floor"), "Stone Floor", PackId, [new ItemAmount(stoneItemId, 1)], new ItemAmount(stoneFloorItemId, 1), "workbench"));
-        registrar.RegisterRecipe(new RecipeDef(new ContentId("basegame:craft_axe"), "Axe", PackId, [new ItemAmount(logItemId, 1), new ItemAmount(ironIngotItemId, 1)], new ItemAmount(axeItemId, 1), "workbench"));
-        registrar.RegisterRecipe(new RecipeDef(new ContentId("basegame:craft_iron_knife"), "Iron Knife", PackId, [new ItemAmount(logItemId, 1), new ItemAmount(ironIngotItemId, 2)], new ItemAmount(ironKnifeItemId, 1), "workbench"));
-        registrar.RegisterRecipe(new RecipeDef(new ContentId("basegame:smelt_voidite"), "Void Crystal", PackId, [new ItemAmount(voiditeItemId, 1)], new ItemAmount(voidCrystalItemId, 2), "furnace", 3f));
-        registrar.RegisterRecipe(new RecipeDef(new ContentId("basegame:smelt_goldvein"), "Gold Ingot + Sand", PackId, [new ItemAmount(goldveinItemId, 1)], new ItemAmount(goldIngotItemId, 1), "furnace", 3.5f, [new ItemAmount(sandItemId, 1)]));
-        registrar.RegisterRecipe(new RecipeDef(new ContentId("basegame:smelt_venomite"), "Poison Crystal + Iron Ingot", PackId, [new ItemAmount(venomiteItemId, 1)], new ItemAmount(poisonCrystalItemId, 1), "furnace", 3.5f, [new ItemAmount(ironIngotItemId, 1)]));
-        registrar.RegisterRecipe(new RecipeDef(new ContentId("basegame:smelt_silicon_wafer"), "Silicon Wafer", PackId, [new ItemAmount(sandItemId, 8)], new ItemAmount(siliconWaferItemId, 1), "furnace", 5f));
+        registrar.RegisterRecipe(new RecipeDef(new ContentId("basegame:craft_workbench"), "Workbench", PackId, [new ItemAmount(logItemId, 4), new ItemAmount(stoneItemId, 1)], new ItemAmount(workbenchItemId, 1), CraftingStationKind.Handcraft));
+        registrar.RegisterRecipe(new RecipeDef(new ContentId("basegame:craft_torch"), "Torch", PackId, [new ItemAmount(logItemId, 1), new ItemAmount(stoneItemId, 1)], new ItemAmount(torchItemId, 1), CraftingStationKind.Handcraft));
+        registrar.RegisterRecipe(new RecipeDef(new ContentId("basegame:craft_chest"), "Wooden Chest", PackId, [new ItemAmount(logItemId, 6)], new ItemAmount(chestItemId, 1), CraftingStationKind.Workbench));
+        registrar.RegisterRecipe(new RecipeDef(new ContentId("basegame:craft_door"), "Wooden Door", PackId, [new ItemAmount(logItemId, 4)], new ItemAmount(doorItemId, 1), CraftingStationKind.Workbench));
+        registrar.RegisterRecipe(new RecipeDef(new ContentId("basegame:craft_fence"), "Wooden Fence", PackId, [new ItemAmount(logItemId, 2)], new ItemAmount(fenceItemId, 2), CraftingStationKind.Workbench));
+        registrar.RegisterRecipe(new RecipeDef(new ContentId("basegame:craft_furnace"), "Furnace", PackId, [new ItemAmount(stoneItemId, 4)], new ItemAmount(furnaceItemId, 1), CraftingStationKind.Workbench));
+        registrar.RegisterRecipe(new RecipeDef(new ContentId("basegame:craft_stone_wall"), "Stone Wall", PackId, [new ItemAmount(stoneItemId, 2)], new ItemAmount(stoneWallItemId, 1), CraftingStationKind.Workbench));
+        registrar.RegisterRecipe(new RecipeDef(new ContentId("basegame:craft_stone_floor"), "Stone Floor", PackId, [new ItemAmount(stoneItemId, 1)], new ItemAmount(stoneFloorItemId, 1), CraftingStationKind.Workbench));
+        registrar.RegisterRecipe(new RecipeDef(new ContentId("basegame:craft_axe"), "Axe", PackId, [new ItemAmount(logItemId, 1), new ItemAmount(ironIngotItemId, 1)], new ItemAmount(axeItemId, 1), CraftingStationKind.Workbench));
+        registrar.RegisterRecipe(new RecipeDef(new ContentId("basegame:craft_iron_knife"), "Iron Knife", PackId, [new ItemAmount(logItemId, 1), new ItemAmount(ironIngotItemId, 2)], new ItemAmount(ironKnifeItemId, 1), CraftingStationKind.Workbench));
+        registrar.RegisterRecipe(new RecipeDef(new ContentId("basegame:smelt_voidite"), "Void Crystal", PackId, [new ItemAmount(voiditeItemId, 1)], new ItemAmount(voidCrystalItemId, 2), CraftingStationKind.Furnace, 3f));
+        registrar.RegisterRecipe(new RecipeDef(new ContentId("basegame:smelt_goldvein"), "Gold Ingot + Sand", PackId, [new ItemAmount(goldveinItemId, 1)], new ItemAmount(goldIngotItemId, 1), CraftingStationKind.Furnace, 3.5f, [new ItemAmount(sandItemId, 1)]));
+        registrar.RegisterRecipe(new RecipeDef(new ContentId("basegame:smelt_venomite"), "Poison Crystal + Iron Ingot", PackId, [new ItemAmount(venomiteItemId, 1)], new ItemAmount(poisonCrystalItemId, 1), CraftingStationKind.Furnace, 3.5f, [new ItemAmount(ironIngotItemId, 1)]));
+        registrar.RegisterRecipe(new RecipeDef(new ContentId("basegame:smelt_silicon_wafer"), "Silicon Wafer", PackId, [new ItemAmount(sandItemId, 8)], new ItemAmount(siliconWaferItemId, 1), CraftingStationKind.Furnace, 5f));
 
         RegisterOverworldPasses(registrar, dirtId, grassId, riverWaterId, rockOutcropNodeId, treeNodeId, blueberryNodeId, stoneNodeId, voiditeRaisedId, goldveinRaisedId, venomiteRaisedId, wormId, cockroachId, portalPlaceableId);
         RegisterPocketWorldPasses(registrar, dimfragId, rockOutcropNodeId, frostcoreRaisedId, portalPlaceableId);
@@ -171,19 +182,19 @@ public sealed class BaseGameContentPack : IContentPack
         ContentId cockroachId,
         ContentId portalPlaceableId)
     {
-        registrar.RegisterWorldGenPass(new WorldGenPassDef(new ContentId("basegame:overworld-fill-dirt"), "fill-terrain", dirtId, WorldSpaceKind.Overworld, PrimarySurfaceRegion: SurfaceRegions.DirtField));
-        registrar.RegisterWorldGenPass(new WorldGenPassDef(new ContentId("basegame:overworld-surface-region"), "surface-region", grassId, WorldSpaceKind.Overworld));
-        registrar.RegisterWorldGenPass(new WorldGenPassDef(new ContentId("basegame:overworld-river"), "river", riverWaterId, WorldSpaceKind.Overworld));
-        registrar.RegisterWorldGenPass(new WorldGenPassDef(new ContentId("basegame:raised-voidite"), "raised-ore-field", voiditeRaisedId, WorldSpaceKind.Overworld));
-        registrar.RegisterWorldGenPass(new WorldGenPassDef(new ContentId("basegame:raised-goldvein"), "raised-ore-field", goldveinRaisedId, WorldSpaceKind.Overworld));
-        registrar.RegisterWorldGenPass(new WorldGenPassDef(new ContentId("basegame:raised-venomite"), "raised-ore-field", venomiteRaisedId, WorldSpaceKind.Overworld));
-        registrar.RegisterWorldGenPass(new WorldGenPassDef(new ContentId("basegame:overworld-rock-outcrop"), "rock-outcrop", rockOutcropNodeId, WorldSpaceKind.Overworld));
-        registrar.RegisterWorldGenPass(new WorldGenPassDef(new ContentId("basegame:spawn-trees"), "scatter-spawn", treeNodeId, WorldSpaceKind.Overworld, 14, 0, 0, 28, 18, SurfaceRegions.GrassField, 3));
-        registrar.RegisterWorldGenPass(new WorldGenPassDef(new ContentId("basegame:spawn-berries"), "scatter-spawn", blueberryNodeId, WorldSpaceKind.Overworld, 8, 0, 0, 28, 18, SurfaceRegions.GrassField, 2));
-        registrar.RegisterWorldGenPass(new WorldGenPassDef(new ContentId("basegame:spawn-stones"), "scatter-spawn", stoneNodeId, WorldSpaceKind.Overworld, 10, 0, 0, 28, 18, SurfaceRegions.DirtField, 2));
-        registrar.RegisterWorldGenPass(new WorldGenPassDef(new ContentId("basegame:spawn-worms"), "scatter-spawn", wormId, WorldSpaceKind.Overworld, 3, 0, 0, 28, 18, SurfaceRegions.DirtField, 5));
-        registrar.RegisterWorldGenPass(new WorldGenPassDef(new ContentId("basegame:spawn-cockroaches"), "scatter-spawn", cockroachId, WorldSpaceKind.Overworld, 4, 0, 0, 28, 18, SurfaceRegions.GrassField, 5));
-        registrar.RegisterWorldGenPass(new WorldGenPassDef(new ContentId("basegame:portal-site"), "portal-site", portalPlaceableId, WorldSpaceKind.Overworld));
+        registrar.RegisterWorldGenPass(new WorldGenPassDef(new ContentId("basegame:overworld-fill-dirt"), WorldGenPassTypes.FillTerrain, dirtId, WorldSpaceKind.Overworld, PrimarySurfaceRegion: SurfaceRegions.DirtField));
+        registrar.RegisterWorldGenPass(new WorldGenPassDef(new ContentId("basegame:overworld-surface-region"), WorldGenPassTypes.SurfaceRegion, grassId, WorldSpaceKind.Overworld));
+        registrar.RegisterWorldGenPass(new WorldGenPassDef(new ContentId("basegame:overworld-river"), WorldGenPassTypes.River, riverWaterId, WorldSpaceKind.Overworld));
+        registrar.RegisterWorldGenPass(new WorldGenPassDef(new ContentId("basegame:raised-voidite"), WorldGenPassTypes.RaisedOreField, voiditeRaisedId, WorldSpaceKind.Overworld));
+        registrar.RegisterWorldGenPass(new WorldGenPassDef(new ContentId("basegame:raised-goldvein"), WorldGenPassTypes.RaisedOreField, goldveinRaisedId, WorldSpaceKind.Overworld));
+        registrar.RegisterWorldGenPass(new WorldGenPassDef(new ContentId("basegame:raised-venomite"), WorldGenPassTypes.RaisedOreField, venomiteRaisedId, WorldSpaceKind.Overworld));
+        registrar.RegisterWorldGenPass(new WorldGenPassDef(new ContentId("basegame:overworld-rock-outcrop"), WorldGenPassTypes.RockOutcrop, rockOutcropNodeId, WorldSpaceKind.Overworld));
+        registrar.RegisterWorldGenPass(new WorldGenPassDef(new ContentId("basegame:spawn-trees"), WorldGenPassTypes.ScatterSpawn, treeNodeId, WorldSpaceKind.Overworld, 14, 0, 0, 28, 18, SurfaceRegions.GrassField, 3));
+        registrar.RegisterWorldGenPass(new WorldGenPassDef(new ContentId("basegame:spawn-berries"), WorldGenPassTypes.ScatterSpawn, blueberryNodeId, WorldSpaceKind.Overworld, 8, 0, 0, 28, 18, SurfaceRegions.GrassField, 2));
+        registrar.RegisterWorldGenPass(new WorldGenPassDef(new ContentId("basegame:spawn-stones"), WorldGenPassTypes.ScatterSpawn, stoneNodeId, WorldSpaceKind.Overworld, 10, 0, 0, 28, 18, SurfaceRegions.DirtField, 2));
+        registrar.RegisterWorldGenPass(new WorldGenPassDef(new ContentId("basegame:spawn-worms"), WorldGenPassTypes.ScatterSpawn, wormId, WorldSpaceKind.Overworld, 3, 0, 0, 28, 18, SurfaceRegions.DirtField, 5));
+        registrar.RegisterWorldGenPass(new WorldGenPassDef(new ContentId("basegame:spawn-cockroaches"), WorldGenPassTypes.ScatterSpawn, cockroachId, WorldSpaceKind.Overworld, 4, 0, 0, 28, 18, SurfaceRegions.GrassField, 5));
+        registrar.RegisterWorldGenPass(new WorldGenPassDef(new ContentId("basegame:portal-site"), WorldGenPassTypes.PortalSite, portalPlaceableId, WorldSpaceKind.Overworld));
     }
 
     private static void RegisterPocketWorldPasses(
@@ -193,9 +204,9 @@ public sealed class BaseGameContentPack : IContentPack
         ContentId frostcoreRaisedId,
         ContentId portalPlaceableId)
     {
-        registrar.RegisterWorldGenPass(new WorldGenPassDef(new ContentId("basegame:dim-fill"), "fill-terrain", dimfragId, WorldSpaceKind.DimShardPocket, PrimarySurfaceRegion: SurfaceRegions.DimShardField));
-        registrar.RegisterWorldGenPass(new WorldGenPassDef(new ContentId("basegame:dim-raised-frostcore"), "raised-ore-field", frostcoreRaisedId, WorldSpaceKind.DimShardPocket));
-        registrar.RegisterWorldGenPass(new WorldGenPassDef(new ContentId("basegame:dim-rock-outcrop"), "rock-outcrop", rockOutcropNodeId, WorldSpaceKind.DimShardPocket));
-        registrar.RegisterWorldGenPass(new WorldGenPassDef(new ContentId("basegame:dim-portal"), "portal-site", portalPlaceableId, WorldSpaceKind.DimShardPocket));
+        registrar.RegisterWorldGenPass(new WorldGenPassDef(new ContentId("basegame:dim-fill"), WorldGenPassTypes.FillTerrain, dimfragId, WorldSpaceKind.DimShardPocket, PrimarySurfaceRegion: SurfaceRegions.DimShardField));
+        registrar.RegisterWorldGenPass(new WorldGenPassDef(new ContentId("basegame:dim-raised-frostcore"), WorldGenPassTypes.RaisedOreField, frostcoreRaisedId, WorldSpaceKind.DimShardPocket));
+        registrar.RegisterWorldGenPass(new WorldGenPassDef(new ContentId("basegame:dim-rock-outcrop"), WorldGenPassTypes.RockOutcrop, rockOutcropNodeId, WorldSpaceKind.DimShardPocket));
+        registrar.RegisterWorldGenPass(new WorldGenPassDef(new ContentId("basegame:dim-portal"), WorldGenPassTypes.PortalSite, portalPlaceableId, WorldSpaceKind.DimShardPocket));
     }
 }

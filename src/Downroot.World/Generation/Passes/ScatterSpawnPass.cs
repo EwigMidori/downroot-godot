@@ -13,7 +13,7 @@ public sealed class ScatterSpawnPass(
     string? requiredSurfaceRegion,
     int minSpacing) : IWorldGenPass
 {
-    public string Name => "scatter-spawn";
+    public string Name => WorldGenPassTypes.ScatterSpawn;
 
     public void Execute(IWorldGenContext context)
     {

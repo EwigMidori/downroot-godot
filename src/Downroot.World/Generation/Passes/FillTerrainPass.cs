@@ -5,7 +5,7 @@ namespace Downroot.World.Generation.Passes;
 
 public sealed class FillTerrainPass(ContentId terrainId, string surfaceRegion) : IWorldGenPass
 {
-    public string Name => "fill-terrain";
+    public string Name => WorldGenPassTypes.FillTerrain;
 
     public void Execute(IWorldGenContext context)
     {

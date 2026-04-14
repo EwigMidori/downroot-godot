@@ -14,5 +14,7 @@ public interface IContentRegistrar
     void RegisterResourceNode(ResourceNodeDef resourceNodeDef);
     void RegisterRaisedFeature(RaisedFeatureDef raisedFeatureDef);
     void RegisterWorldGenPass(WorldGenPassDef passDef);
+    void RegisterPortalWorldLink(PortalWorldLinkDef def);
+    void RegisterRaisedOreFieldRule(RaisedOreFieldRuleDef def);
     void SetBootstrapConfig(GameBootstrapConfig config);
 }

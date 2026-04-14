@@ -24,7 +24,11 @@ public sealed class LoadedWorldState
 
     public bool ContainsChunk(ChunkCoord coord) => Model.ContainsChunk(coord);
 
-    public IEnumerable<WorldEntityState> EnumerateEntities() => _loadedChunks.Values.SelectMany(chunk => chunk.Entities);
+    public IEnumerable<WorldEntityState> EnumerateEntities() => EnumerateLoadedEntities();
+
+    public IEnumerable<WorldEntityState> EnumerateLoadedEntities() => _loadedChunks.Values.SelectMany(chunk => chunk.Entities);
+
+    public IEnumerable<WorldEntityState> EnumerateLoadedEntities(WorldEntityKind kind) => EnumerateLoadedEntities().Where(entity => entity.Kind == kind);
 
     public bool TryGetChunk(ChunkCoord coord, out ChunkRuntimeState chunk) => _loadedChunks.TryGetValue(coord, out chunk!);
 
@@ -91,6 +95,30 @@ public sealed class LoadedWorldState
             IsSameRaisedFeature(tile, new WorldTileCoord(tile.X - 1, tile.Y - 1), featureId.Value, chunkWidth, chunkHeight),
             IsSameRaisedFeature(tile, new WorldTileCoord(tile.X + 1, tile.Y + 1), featureId.Value, chunkWidth, chunkHeight),
             IsSameRaisedFeature(tile, new WorldTileCoord(tile.X - 1, tile.Y + 1), featureId.Value, chunkWidth, chunkHeight));
+    }
+
+    public bool TryGetRaisedFeature(WorldTileCoord tile, int chunkWidth, int chunkHeight, out ContentId? featureId, out byte variantIndex)
+    {
+        featureId = GetRaisedFeatureId(tile, chunkWidth, chunkHeight);
+        if (featureId is null)
+        {
+            variantIndex = 0;
+            return false;
+        }
+
+        variantIndex = GetRaisedFeatureVariantIndex(tile, chunkWidth, chunkHeight);
+        return true;
+    }
+
+    public void RemoveRaisedFeature(WorldTileCoord tile, int chunkWidth, int chunkHeight)
+    {
+        if (!TryGetChunkForTile(tile, chunkWidth, chunkHeight, out var chunk, out _))
+        {
+            return;
+        }
+
+        chunk.RemovedRaisedFeatureTiles.Add(tile);
+        MarkRaisedFeatureDirty(EnumerateRaisedFeatureDirtyTiles(tile));
     }
 
     public void MarkRaisedFeatureDirty(IEnumerable<WorldTileCoord> tiles)
@@ -213,5 +241,16 @@ public sealed class LoadedWorldState
         }
 
         return false;
+    }
+
+    private static IEnumerable<WorldTileCoord> EnumerateRaisedFeatureDirtyTiles(WorldTileCoord origin)
+    {
+        for (var dy = -1; dy <= 1; dy++)
+        {
+            for (var dx = -1; dx <= 1; dx++)
+            {
+                yield return new WorldTileCoord(origin.X + dx, origin.Y + dy);
+            }
+        }
     }
 }

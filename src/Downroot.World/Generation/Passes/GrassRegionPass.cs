@@ -9,7 +9,7 @@ public sealed class GrassRegionPass(ContentId terrainId) : IWorldGenPass
     private const float DetailFrequency = 0.34f;
     private const float GrassThreshold = 0.57f;
 
-    public string Name => "grass-region";
+    public string Name => WorldGenPassTypes.SurfaceRegion;
 
     public void Execute(IWorldGenContext context)
     {

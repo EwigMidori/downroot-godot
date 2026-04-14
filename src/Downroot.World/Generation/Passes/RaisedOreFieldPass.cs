@@ -4,18 +4,19 @@ using Downroot.World.Models;
 
 namespace Downroot.World.Generation.Passes;
 
-public sealed class RaisedOreFieldPass(ContentId featureId) : IWorldGenPass
+public sealed class RaisedOreFieldPass(ContentId featureId, RaisedOreFieldRuleResolver ruleResolver) : IWorldGenPass
 {
     private static readonly int[] AreaBuckets = [9, 16, 25, 36, 49, 64, 81, 100, 144, 196, 256, 400, 576, 784, 1024];
 
-    public string Name => "raised-ore-field";
+    public string Name => WorldGenPassTypes.RaisedOreField;
 
     public void Execute(IWorldGenContext context)
     {
+        var rule = ruleResolver.Resolve(featureId, context.WorldSpaceKind);
         var occupancy = new Dictionary<WorldTileCoord, bool>();
         foreach (var worldTile in EnumerateHalo(context))
         {
-            occupancy[worldTile] = SampleRawOccupancy(context, worldTile);
+            occupancy[worldTile] = SampleRawOccupancy(context, rule, worldTile);
         }
 
         LegalizeOccupancy(occupancy);
@@ -58,9 +59,9 @@ public sealed class RaisedOreFieldPass(ContentId featureId) : IWorldGenPass
         }
     }
 
-    private bool SampleRawOccupancy(IWorldGenContext context, WorldTileCoord worldTile)
+    private bool SampleRawOccupancy(IWorldGenContext context, RaisedOreFieldRuleDef rule, WorldTileCoord worldTile)
     {
-        if (!MatchesWorldAndRegion(context, worldTile))
+        if (!MatchesWorldAndRegion(context, rule, worldTile))
         {
             return false;
         }
@@ -72,7 +73,7 @@ public sealed class RaisedOreFieldPass(ContentId featureId) : IWorldGenPass
             for (var gx = cellX - 2; gx <= cellX + 2; gx++)
             {
                 var latticeCoord = new WorldTileCoord(gx, gy);
-                if (!TrySampleDeposit(context, latticeCoord, out var deposit) || deposit.FeatureId != featureId)
+                if (!TrySampleDeposit(context, rule, latticeCoord, out var deposit) || deposit.FeatureId != featureId)
                 {
                     continue;
                 }
@@ -97,24 +98,10 @@ public sealed class RaisedOreFieldPass(ContentId featureId) : IWorldGenPass
         return false;
     }
 
-    private bool MatchesWorldAndRegion(IWorldGenContext context, WorldTileCoord worldTile)
+    private bool MatchesWorldAndRegion(IWorldGenContext context, RaisedOreFieldRuleDef rule, WorldTileCoord worldTile)
     {
-        if (context.WorldSpaceKind == WorldSpaceKind.Overworld)
-        {
-            if (featureId.Value == "basegame:frostcore_raised")
-            {
-                return false;
-            }
-
-            return SampleSurfaceRegion(context, worldTile) == SurfaceRegions.DirtField;
-        }
-
-        if (context.WorldSpaceKind != WorldSpaceKind.DimShardPocket || featureId.Value != "basegame:frostcore_raised")
-        {
-            return false;
-        }
-
-        return SampleSurfaceRegion(context, worldTile) == SurfaceRegions.DimShardField;
+        return context.WorldSpaceKind == rule.WorldSpaceKind
+            && SampleSurfaceRegion(context, worldTile) == rule.RequiredSurfaceRegion;
     }
 
     private string SampleSurfaceRegion(IWorldGenContext context, WorldTileCoord worldTile)
@@ -134,17 +121,16 @@ public sealed class RaisedOreFieldPass(ContentId featureId) : IWorldGenPass
         return isRiver ? SurfaceRegions.River : SurfaceRegions.DirtField;
     }
 
-    private bool TrySampleDeposit(IWorldGenContext context, WorldTileCoord latticeCoord, out Deposit deposit)
+    private bool TrySampleDeposit(IWorldGenContext context, RaisedOreFieldRuleDef rule, WorldTileCoord latticeCoord, out Deposit deposit)
     {
         var roll = context.GetStableUnitValue(latticeCoord, 8101);
-        var threshold = context.WorldSpaceKind == WorldSpaceKind.Overworld ? 0.48f : 0.24f;
-        if (roll > threshold)
+        if (roll > rule.DepositThreshold)
         {
             deposit = default;
             return false;
         }
 
-        var depositFeatureId = ResolveDepositFeatureId(context, latticeCoord);
+        var depositFeatureId = ruleResolver.ResolveMixedFeature(rule, context, latticeCoord);
         var area = ResolveAreaBucket(context.GetStableUnitValue(latticeCoord, 8107));
         var center = new WorldTileCoord(
             (latticeCoord.X * 18) + 9 + (int)MathF.Round((context.GetStableUnitValue(latticeCoord, 8113) - 0.5f) * 8f),
@@ -157,22 +143,6 @@ public sealed class RaisedOreFieldPass(ContentId featureId) : IWorldGenPass
             MathF.Max(2.5f, radius * (0.8f + (context.GetStableUnitValue(latticeCoord, 8141) * 0.55f))),
             context.GetStableHash(latticeCoord, 8153));
         return true;
-    }
-
-    private ContentId ResolveDepositFeatureId(IWorldGenContext context, WorldTileCoord latticeCoord)
-    {
-        if (context.WorldSpaceKind == WorldSpaceKind.DimShardPocket)
-        {
-            return featureId;
-        }
-
-        var roll = context.GetStableUnitValue(latticeCoord, 8161);
-        return roll switch
-        {
-            < 0.4f => new ContentId("basegame:voidite_raised"),
-            < 0.7f => new ContentId("basegame:goldvein_raised"),
-            _ => new ContentId("basegame:venomite_raised")
-        };
     }
 
     private static int ResolveAreaBucket(float roll)

@@ -3,18 +3,13 @@ using Downroot.Core.World;
 
 namespace Downroot.World.Generation.Passes;
 
-public sealed class PortalSitePass(ContentId portalId) : IWorldGenPass
+public sealed class PortalSitePass(ContentId portalId, IReadOnlyList<PortalWorldLinkDef> links) : IWorldGenPass
 {
-    public string Name => "portal-site";
+    public string Name => WorldGenPassTypes.PortalSite;
 
     public void Execute(IWorldGenContext context)
     {
-        if (context.WorldSpaceKind == WorldSpaceKind.Overworld && context.ChunkCoord != new ChunkCoord(1, 0))
-        {
-            return;
-        }
-
-        if (context.WorldSpaceKind == WorldSpaceKind.DimShardPocket && context.ChunkCoord != new ChunkCoord(0, 0))
+        if (!HasPortalInChunk(context.WorldSpaceKind, context.ChunkCoord))
         {
             return;
         }
@@ -27,6 +22,13 @@ public sealed class PortalSitePass(ContentId portalId) : IWorldGenPass
         }
 
         context.AddSpawn(best.Value, portalId);
+    }
+
+    private bool HasPortalInChunk(WorldSpaceKind worldSpaceKind, ChunkCoord chunkCoord)
+    {
+        return links.Any(link =>
+            (link.SourceWorldSpaceKind == worldSpaceKind && link.SourcePortalChunk == chunkCoord)
+            || (link.TargetWorldSpaceKind == worldSpaceKind && link.TargetPortalChunk == chunkCoord));
     }
 
     private static LocalTileCoord? FindNearestUsableTile(IWorldGenContext context, LocalTileCoord origin)

@@ -37,7 +37,7 @@ public partial class GameRoot : Node2D
             var packPathResolver = new PackPathResolver();
             _textureLoader = new TextureContentLoader(packPathResolver);
             _animationFactory = new PlayerAnimationFactory(packPathResolver);
-            GD.Print($"Content root resolved. Example grass path: {packPathResolver.ResolveAbsolutePath("packs/basegame/assets/world/terrain/ground/grass.png")}");
+            GD.Print("Content root resolved.");
 
             _startupOverlay.UpdateStatus("Creating HUD");
             _hudController = new HudController(this, _textureLoader);

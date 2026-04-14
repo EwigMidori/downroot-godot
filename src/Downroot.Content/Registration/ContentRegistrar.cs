@@ -24,5 +24,9 @@ public sealed class ContentRegistrar(ContentRegistrySet registries) : IContentRe
 
     public void RegisterWorldGenPass(WorldGenPassDef passDef) => registries.WorldGenPasses.Add(passDef);
 
+    public void RegisterPortalWorldLink(PortalWorldLinkDef def) => registries.PortalWorldLinks.Add(def);
+
+    public void RegisterRaisedOreFieldRule(RaisedOreFieldRuleDef def) => registries.RaisedOreFieldRules.Add(def);
+
     public void SetBootstrapConfig(GameBootstrapConfig config) => registries.BootstrapConfig = config;
 }

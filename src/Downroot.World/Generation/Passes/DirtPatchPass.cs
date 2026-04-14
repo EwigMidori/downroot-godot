@@ -5,7 +5,7 @@ namespace Downroot.World.Generation.Passes;
 
 public sealed class DirtPatchPass(ContentId terrainId) : IWorldGenPass
 {
-    public string Name => "dirt-patch";
+    public string Name => WorldGenPassTypes.DirtPatch;
 
     public void Execute(IWorldGenContext context)
     {

@@ -18,6 +18,8 @@ public sealed class ContentRegistrySet
         ResourceNodes = new Registry<ResourceNodeDef>();
         RaisedFeatures = new Registry<RaisedFeatureDef>();
         WorldGenPasses = new List<WorldGenPassDef>();
+        PortalWorldLinks = new List<PortalWorldLinkDef>();
+        RaisedOreFieldRules = new List<RaisedOreFieldRuleDef>();
     }
 
     public IRegistry<ItemDef> Items { get; }
@@ -28,6 +30,8 @@ public sealed class ContentRegistrySet
     public IRegistry<ResourceNodeDef> ResourceNodes { get; }
     public IRegistry<RaisedFeatureDef> RaisedFeatures { get; }
     public IList<WorldGenPassDef> WorldGenPasses { get; }
+    public IList<PortalWorldLinkDef> PortalWorldLinks { get; }
+    public IList<RaisedOreFieldRuleDef> RaisedOreFieldRules { get; }
     public GameBootstrapConfig? BootstrapConfig { get; set; }
 
     public ContentRegistrar CreateRegistrar() => new(this);

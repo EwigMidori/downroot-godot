@@ -5,7 +5,7 @@ namespace Downroot.World.Generation.Passes;
 
 public sealed class RockOutcropPass(ContentId outcropId) : IWorldGenPass
 {
-    public string Name => "rock-outcrop";
+    public string Name => WorldGenPassTypes.RockOutcrop;
 
     public void Execute(IWorldGenContext context)
     {

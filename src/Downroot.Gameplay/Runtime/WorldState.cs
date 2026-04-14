@@ -1,4 +1,5 @@
 using Downroot.Core.Ids;
+using Downroot.Core.Gameplay;
 using Downroot.Core.World;
 
 namespace Downroot.Gameplay.Runtime;
@@ -6,7 +7,9 @@ namespace Downroot.Gameplay.Runtime;
 public sealed class WorldState
 {
     private readonly List<WorldEntityState> _entities = [];
+    private readonly EntityProjectionBuilder _projectionBuilder = new();
 
+    // Active-world convenience projection for renderer, UI, and query services.
     public IReadOnlyList<WorldEntityState> Entities => _entities;
     public WorldSpaceKind ActiveWorldSpaceKind { get; set; } = WorldSpaceKind.Overworld;
     public required LoadedWorldState Overworld { get; init; }
@@ -15,7 +18,7 @@ public sealed class WorldState
     public float TimeOfDaySeconds { get; set; }
     public float TotalElapsedSeconds { get; set; }
     public CraftWorkspaceMode WorkspaceMode { get; set; }
-    public string? ActiveStationKey { get; set; }
+    public CraftingStationKind? ActiveStationKind { get; set; }
     public EntityId? ActiveStationEntityId { get; set; }
     public InteractionContext? CurrentInteraction { get; set; }
     public StatusEventState? ActiveStatusEvent { get; private set; }
@@ -35,12 +38,13 @@ public sealed class WorldState
 
     public void RefreshEntityProjection()
     {
+        RebuildEntityProjection(_projectionBuilder);
+    }
+
+    public void RebuildEntityProjection(EntityProjectionBuilder builder)
+    {
         _entities.Clear();
-        _entities.AddRange(GetActiveWorld()
-            .EnumerateEntities()
-            .Where(entity => !entity.Removed)
-            .OrderBy(entity => entity.Position.Y)
-            .ThenBy(entity => entity.Position.X));
+        _entities.AddRange(builder.Build(GetActiveWorld()));
     }
 
     public void SetStatusEvent(StatusEventState statusEvent, float seconds = 2f)

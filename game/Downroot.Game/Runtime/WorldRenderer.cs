@@ -21,6 +21,7 @@ public sealed partial class WorldRenderer : Node2D
     private readonly Dictionary<ChunkCoord, ChunkVisualState> _chunkVisuals = [];
 
     private GameRuntime? _runtime;
+    private WorldRuntimeFacade? _worldFacade;
     private Node2D? _terrainLayer;
     private Node2D? _entityLayer;
     private CharacterBody2D? _playerBody;
@@ -37,6 +38,7 @@ public sealed partial class WorldRenderer : Node2D
     public void Initialize(GameRuntime runtime)
     {
         _runtime = runtime;
+        _worldFacade = new WorldRuntimeFacade(runtime);
         _terrainLayer = new Node2D { Name = "TerrainLayer" };
         _entityLayer = new Node2D { Name = "EntityLayer" };
         AddChild(_terrainLayer);
@@ -72,16 +74,31 @@ public sealed partial class WorldRenderer : Node2D
 
     public void ValidateContentLoads(GameRuntime runtime)
     {
-        _ = ResolveTerrainTexture(runtime.Content.Terrains.Get(new ContentId("basegame:grass")));
-        _ = ResolveTerrainTexture(runtime.Content.Terrains.Get(new ContentId("basegame:dirt")));
-        _ = ResolveTerrainTexture(runtime.Content.Terrains.Get(new ContentId("basegame:river_water")));
-        _ = ResolveTerrainTexture(runtime.Content.Terrains.Get(new ContentId("basegame:dimfrag")));
-        _ = ResolveItemTexture(runtime.Content.Items.Get(new ContentId("basegame:stone")));
-        _ = ResolveItemTexture(runtime.Content.Items.Get(new ContentId("basegame:frostcore")));
-        _ = ResolveRaisedFeatureTexture(runtime.Content.RaisedFeatures.Get(new ContentId("basegame:voidite_raised")), 0);
-        _ = ResolveRaisedFeatureTexture(runtime.Content.RaisedFeatures.Get(new ContentId("basegame:frostcore_raised")), 0);
-        _ = ResolvePlaceableTexture(runtime.Content.Placeables.Get(new ContentId("basegame:portal")), false);
-        _ = ResolveResourceNodeTexture(runtime.Content.ResourceNodes.Get(new ContentId("basegame:rock_outcrop")));
+        foreach (var terrain in runtime.Content.Terrains.All.Take(4))
+        {
+            _ = ResolveTerrainTexture(terrain);
+        }
+
+        foreach (var item in runtime.Content.Items.All.Take(4))
+        {
+            _ = ResolveItemTexture(item);
+        }
+
+        foreach (var raisedFeature in runtime.Content.RaisedFeatures.All.Take(2))
+        {
+            _ = ResolveRaisedFeatureTexture(raisedFeature, 0);
+        }
+
+        foreach (var placeable in runtime.Content.Placeables.All.Take(2))
+        {
+            _ = ResolvePlaceableTexture(placeable, false);
+        }
+
+        foreach (var resourceNode in runtime.Content.ResourceNodes.All.Take(2))
+        {
+            _ = ResolveResourceNodeTexture(resourceNode);
+        }
+
         GD.Print($"Loaded chunks: {runtime.WorldState.GetActiveWorld().LoadedChunks.Count}, active entities: {runtime.WorldState.Entities.Count}");
     }
 
@@ -97,7 +114,7 @@ public sealed partial class WorldRenderer : Node2D
 
     private void SynchronizeChunks()
     {
-        var world = _runtime!.WorldState.GetActiveWorld();
+        var world = _worldFacade!.GetActiveWorld();
         var desiredChunks = world.LoadedChunks.Keys.ToHashSet();
         foreach (var staleChunk in _chunkVisuals.Keys.Where(coord => !desiredChunks.Contains(coord)).ToArray())
         {
@@ -160,10 +177,10 @@ public sealed partial class WorldRenderer : Node2D
 
     private void RefreshDirtyRaisedFeatures()
     {
-        var world = _runtime!.WorldState.GetActiveWorld();
+        var world = _worldFacade!.GetActiveWorld();
         foreach (var tile in world.ConsumeDirtyRaisedFeatureTiles())
         {
-            var chunkCoord = tile.ToChunkCoord(_runtime.ChunkWidth, _runtime.ChunkHeight);
+            var chunkCoord = tile.ToChunkCoord(_runtime!.ChunkWidth, _runtime.ChunkHeight);
             if (!_chunkVisuals.TryGetValue(chunkCoord, out var visual))
             {
                 continue;
@@ -181,19 +198,17 @@ public sealed partial class WorldRenderer : Node2D
             existing.QueueFree();
         }
 
-        var world = _runtime!.WorldState.GetActiveWorld();
-        var featureId = world.GetRaisedFeatureId(tile, _runtime.ChunkWidth, _runtime.ChunkHeight);
-        if (featureId is null)
+        if (!_worldFacade!.GetActiveWorld().TryGetRaisedFeature(tile, _runtime!.ChunkWidth, _runtime.ChunkHeight, out var featureId, out var variantIndex))
         {
             return;
         }
 
-        var raisedFeature = _runtime.Content.RaisedFeatures.Get(featureId.Value);
+        var raisedFeature = _runtime.Content.RaisedFeatures.Get(featureId!.Value);
         var sprite = new Sprite2D
         {
             Name = $"Raised_{tile.X}_{tile.Y}",
             Centered = false,
-            Texture = ResolveRaisedFeatureTexture(raisedFeature, world.GetRaisedFeatureVariantIndex(tile, _runtime.ChunkWidth, _runtime.ChunkHeight)),
+            Texture = ResolveRaisedFeatureTexture(raisedFeature, variantIndex),
             Position = new Vector2(tile.X * TileSize, tile.Y * TileSize),
             ZIndex = 2
         };
