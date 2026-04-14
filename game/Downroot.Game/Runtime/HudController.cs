@@ -36,6 +36,11 @@ public sealed class HudController
     {
         _simulation = simulation;
         _host.AddChild(_view);
+        for (var index = 0; index < _view.InventorySlots.Count; index++)
+        {
+            var inventoryIndex = index;
+            _view.InventorySlots[index].SlotRoot.GuiInput += @event => OnInventorySlotInput(inventoryIndex, @event);
+        }
     }
 
     public void Refresh(GameRuntime runtime, Func<NumericsVector2, Vector2> worldToScreen)
@@ -62,6 +67,9 @@ public sealed class HudController
         {
             var slotView = snapshot.CraftingPanel.InventorySlots[index];
             _view.SetSlot(_view.InventorySlots[index], ResolveItemIcon(slotView.ItemId, runtime), slotView.Quantity, false);
+            _view.InventorySlots[index].SlotRoot.TooltipText = index == runtime.Player.SelectedHotbarIndex
+                ? "Current hand slot"
+                : $"Click to move into hotbar slot {runtime.Player.SelectedHotbarIndex + 1}";
         }
 
         if (snapshot.CraftingPanel.IsVisible)
@@ -194,6 +202,17 @@ public sealed class HudController
             GD.Print($"[Craft UI] Blocked {recipeId.Value}: {failureReason}");
         }
 
+        _recipeStateKey = null;
+    }
+
+    private void OnInventorySlotInput(int inventoryIndex, InputEvent @event)
+    {
+        if (@event is not InputEventMouseButton { Pressed: true, ButtonIndex: MouseButton.Left })
+        {
+            return;
+        }
+
+        _simulation!.MoveInventorySlotToSelectedHotbar(inventoryIndex);
         _recipeStateKey = null;
     }
 }

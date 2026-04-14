@@ -126,8 +126,8 @@ public sealed class BaseGameContentPack : IContentPack
         registrar.RegisterRaisedOreFieldRule(new RaisedOreFieldRuleDef(frostcoreRaisedId, WorldSpaceKind.DimShardPocket, SurfaceRegions.DimShardField, 0.24f, false, [frostcoreRaisedId]));
 
         registrar.RegisterCreature(new CreatureDef(playerId, "Human", PackId, "packs/basegame/assets/characters/humans/default/idle.png", "packs/basegame/assets/characters/humans/default/run.png", null, 64, 64, 140f));
-        registrar.RegisterCreature(new CreatureDef(wormId, "Worm", PackId, "packs/basegame/assets/world/nature/plants/worm.png", "packs/basegame/assets/world/nature/plants/worm.png", "packs/basegame/assets/world/nature/plants/worm.png", 16, 16, 28f, 4, true, 1));
-        registrar.RegisterCreature(new CreatureDef(cockroachId, "Cockroach", PackId, "packs/basegame/assets/world/nature/plants/cockroach.png", "packs/basegame/assets/world/nature/plants/cockroach.png", "packs/basegame/assets/world/nature/plants/cockroach.png", 16, 16, 34f, 1, false, 2, 128f, 192f, 160f, 1f));
+        registrar.RegisterCreature(new CreatureDef(wormId, "Worm", PackId, "packs/basegame/assets/world/nature/plants/worm.png", "packs/basegame/assets/world/nature/plants/worm.png", "packs/basegame/assets/world/nature/plants/worm.png", 16, 16, 28f, 4, true, 4, 0f, 0f, 88f, 1f));
+        registrar.RegisterCreature(new CreatureDef(cockroachId, "Cockroach", PackId, "packs/basegame/assets/world/nature/plants/cockroach.png", "packs/basegame/assets/world/nature/plants/cockroach.png", "packs/basegame/assets/world/nature/plants/cockroach.png", 16, 16, 34f, 1, false, 5, 128f, 192f, 72f, 1f));
 
         registrar.RegisterRecipe(new RecipeDef(new ContentId("basegame:craft_workbench"), "Workbench", PackId, [new ItemAmount(logItemId, 4), new ItemAmount(stoneItemId, 1)], new ItemAmount(workbenchItemId, 1), CraftingStationKind.Handcraft));
         registrar.RegisterRecipe(new RecipeDef(new ContentId("basegame:craft_torch"), "Torch", PackId, [new ItemAmount(logItemId, 1), new ItemAmount(stoneItemId, 1)], new ItemAmount(torchItemId, 1), CraftingStationKind.Handcraft));

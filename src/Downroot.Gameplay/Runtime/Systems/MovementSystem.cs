@@ -10,14 +10,14 @@ public sealed class MovementSystem(GameRuntime runtime, WorldRuntimeFacade world
 
     public void UpdatePlayerMovement(float deltaSeconds, Vector2 movement)
     {
-        if (movement == Vector2.Zero)
+        var direction = NormalizeMovement(movement);
+        if (direction == Vector2.Zero)
         {
             return;
         }
 
-        var normalized = Vector2.Normalize(movement);
-        runtime.Player.Facing = normalized;
-        runtime.Player.Position = MoveWithCollision(runtime.Player.Position, normalized * runtime.Player.Speed * deltaSeconds);
+        runtime.Player.Facing = direction;
+        runtime.Player.Position = MoveWithCollision(runtime.Player.Position, direction * runtime.Player.Speed * deltaSeconds);
     }
 
     public Vector2 MoveWithCollision(Vector2 currentPosition, Vector2 delta, EntityId? ignoreEntityId = null)
@@ -92,5 +92,12 @@ public sealed class MovementSystem(GameRuntime runtime, WorldRuntimeFacade world
         return new Vector2(
             Math.Clamp(position.X, minTile.X * 32f, maxTile.X * 32f),
             Math.Clamp(position.Y, minTile.Y * 32f, maxTile.Y * 32f));
+    }
+
+    public static Vector2 NormalizeMovement(Vector2 movement)
+    {
+        return movement == Vector2.Zero
+            ? Vector2.Zero
+            : Vector2.Normalize(movement);
     }
 }

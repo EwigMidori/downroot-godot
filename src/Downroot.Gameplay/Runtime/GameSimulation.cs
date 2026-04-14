@@ -88,6 +88,44 @@ public sealed class GameSimulation
 
     public bool TryCraft(ContentId recipeId, out string failureReason) => _craftingSystem.TryCraft(recipeId, out failureReason);
 
+    public void MoveInventorySlotToSelectedHotbar(int inventoryIndex)
+    {
+        if (inventoryIndex < 0 || inventoryIndex >= _runtime.Player.Inventory.Slots.Count)
+        {
+            return;
+        }
+
+        var selectedHotbarIndex = _runtime.Player.SelectedHotbarIndex;
+        if (selectedHotbarIndex < 0 || selectedHotbarIndex >= _runtime.Player.HotbarSize)
+        {
+            return;
+        }
+
+        if (inventoryIndex == selectedHotbarIndex)
+        {
+            return;
+        }
+
+        var inventorySlot = _runtime.Player.Inventory.Slots[inventoryIndex];
+        if (inventorySlot.IsEmpty)
+        {
+            return;
+        }
+
+        var hotbarSlot = _runtime.Player.Inventory.Slots[selectedHotbarIndex];
+        var hotbarItemId = hotbarSlot.ItemId;
+        var hotbarQuantity = hotbarSlot.Quantity;
+
+        hotbarSlot.Set(inventorySlot.ItemId!.Value, inventorySlot.Quantity);
+        if (hotbarItemId is null || hotbarQuantity <= 0)
+        {
+            inventorySlot.Clear();
+            return;
+        }
+
+        inventorySlot.Set(hotbarItemId.Value, hotbarQuantity);
+    }
+
     private void UpdateHotbarSelection(InputFrame input)
     {
         if (input.DirectHotbarSlot is { } directIndex)
