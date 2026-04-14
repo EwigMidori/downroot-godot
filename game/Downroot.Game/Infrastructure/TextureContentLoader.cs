@@ -8,13 +8,18 @@ public sealed class TextureContentLoader(PackPathResolver packPathResolver)
 {
     public TextureLoadResult LoadTerrain(TerrainDef terrainDef)
     {
+        return LoadTerrain(terrainDef, terrainDef.AtlasColumn, terrainDef.AtlasRow);
+    }
+
+    public TextureLoadResult LoadTerrain(TerrainDef terrainDef, int atlasColumn, int atlasRow)
+    {
         var texture = LoadTexture(terrainDef.Id.Value, terrainDef.TexturePath);
         var atlas = new AtlasTexture
         {
             Atlas = texture.Texture,
             Region = new Rect2(
-                terrainDef.AtlasColumn * terrainDef.TileWidth,
-                terrainDef.AtlasRow * terrainDef.TileHeight,
+                atlasColumn * terrainDef.TileWidth,
+                atlasRow * terrainDef.TileHeight,
                 terrainDef.TileWidth,
                 terrainDef.TileHeight)
         };

@@ -82,7 +82,7 @@ public sealed partial class WorldRenderer : Node2D
     {
         foreach (var terrain in runtime.Content.Terrains.All)
         {
-            _ = ResolveTerrainTexture(terrain);
+            _ = ResolveTerrainTexture(terrain, terrain.AtlasColumn, terrain.AtlasRow);
         }
 
         foreach (var item in runtime.Content.Items.All)
@@ -158,12 +158,14 @@ public sealed partial class WorldRenderer : Node2D
             {
                 var terrainId = chunk.Surface.GetTerrainId(x, y) ?? _runtime.BootstrapConfig.DefaultTerrainId;
                 var terrainDef = _runtime.Content.Terrains.Get(terrainId);
+                var worldTile = new WorldTileCoord(chunkOriginTile.X + x, chunkOriginTile.Y + y);
+                var (atlasColumn, atlasRow) = ResolveTerrainVariant(terrainDef, worldTile);
                 terrainRoot.AddChild(new Sprite2D
                 {
                     Name = $"Terrain_{x}_{y}",
                     Centered = false,
-                    Texture = ResolveTerrainTexture(terrainDef),
-                    Position = new Vector2((chunkOriginTile.X + x) * TileSize, (chunkOriginTile.Y + y) * TileSize)
+                    Texture = ResolveTerrainTexture(terrainDef, atlasColumn, atlasRow),
+                    Position = new Vector2(worldTile.X * TileSize, worldTile.Y * TileSize)
                 });
             }
         }
@@ -297,7 +299,12 @@ public sealed partial class WorldRenderer : Node2D
         }
     }
 
-    private Texture2D ResolveTerrainTexture(TerrainDef terrainDef) => ResolveCachedTexture($"terrain:{terrainDef.Id.Value}", () => _textureLoader.LoadTerrain(terrainDef).Texture);
+    private Texture2D ResolveTerrainTexture(TerrainDef terrainDef, int atlasColumn, int atlasRow)
+    {
+        return ResolveCachedTexture(
+            $"terrain:{terrainDef.Id.Value}:{atlasColumn}:{atlasRow}",
+            () => _textureLoader.LoadTerrain(terrainDef, atlasColumn, atlasRow).Texture);
+    }
 
     private Texture2D ResolveItemTexture(ItemDef itemDef) => ResolveCachedTexture($"item:{itemDef.Id.Value}", () => _textureLoader.LoadItem(itemDef).Texture);
 
@@ -331,6 +338,36 @@ public sealed partial class WorldRenderer : Node2D
         texture = factory();
         _textureCache[key] = texture;
         return texture;
+    }
+
+    private (int AtlasColumn, int AtlasRow) ResolveTerrainVariant(TerrainDef terrainDef, WorldTileCoord tile)
+    {
+        if (terrainDef.VariantColumnCount <= 1 && terrainDef.VariantRowCount <= 1)
+        {
+            return (terrainDef.AtlasColumn, terrainDef.AtlasRow);
+        }
+
+        var variantCount = terrainDef.VariantColumnCount * terrainDef.VariantRowCount;
+        var variantIndex = GetDeterministicTerrainVariantIndex(terrainDef.Id.Value, tile, _worldFacade!.GetActiveWorld().WorldSeed, variantCount);
+        return (
+            terrainDef.AtlasColumn + (variantIndex % terrainDef.VariantColumnCount),
+            terrainDef.AtlasRow + (variantIndex / terrainDef.VariantColumnCount));
+    }
+
+    private static int GetDeterministicTerrainVariantIndex(string terrainId, WorldTileCoord tile, int worldSeed, int variantCount)
+    {
+        unchecked
+        {
+            var hash = worldSeed;
+            foreach (var character in terrainId)
+            {
+                hash = (hash * 397) ^ character;
+            }
+
+            hash = (hash * 397) ^ tile.X;
+            hash = (hash * 397) ^ tile.Y;
+            return (int)(uint)hash % variantCount;
+        }
     }
 
     private int ResolveZIndex(WorldEntityState entity)

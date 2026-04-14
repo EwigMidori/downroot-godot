@@ -73,7 +73,7 @@ public sealed class BaseGameContentPack : IContentPack
             "overworld-1,0-to-dimshard-0,0");
 
         registrar.RegisterTerrain(new TerrainDef(grassId, "Grass", PackId, "packs/basegame/assets/world/terrain/ground/grass.png", 32, 32, 0, 0));
-        registrar.RegisterTerrain(new TerrainDef(dirtId, "Dirt", PackId, "packs/basegame/assets/world/terrain/ground/dirt.png", 32, 32, 0, 0));
+        registrar.RegisterTerrain(new TerrainDef(dirtId, "Dirt", PackId, "packs/basegame/assets/world/terrain/ground/dirt.png", 32, 32, 0, 0, 8, 4));
         registrar.RegisterTerrain(new TerrainDef(riverWaterId, "River Water", PackId, "packs/basegame/assets/world/terrain/ground/river_water.png", 32, 32, 0, 0));
         registrar.RegisterTerrain(new TerrainDef(dimfragId, "Dimfrag", PackId, "packs/basegame/assets/world/terrain/ground/dimfrag.png", 32, 32, 0, 0));
 
@@ -90,10 +90,10 @@ public sealed class BaseGameContentPack : IContentPack
         registrar.RegisterItem(new ItemDef(logItemId, "Log", PackId, "packs/basegame/assets/items/log_item.png", 28, 32, 99));
         registrar.RegisterItem(new ItemDef(stoneItemId, "Stone", PackId, "packs/basegame/assets/items/stone_item.png", 16, 16, 99));
         registrar.RegisterItem(new ItemDef(blueberryItemId, "Blueberry", PackId, "packs/basegame/assets/world/nature/plants/blueberry_bush.png", 16, 16, 20, null, 20));
-        registrar.RegisterItem(new ItemDef(voiditeItemId, "Voidite", PackId, "packs/basegame/assets/world/nature/ores/voidite.png", 32, 32, 32));
-        registrar.RegisterItem(new ItemDef(goldveinItemId, "Goldvein", PackId, "packs/basegame/assets/world/nature/ores/goldvein.png", 32, 32, 32));
-        registrar.RegisterItem(new ItemDef(venomiteItemId, "Venomite", PackId, "packs/basegame/assets/world/nature/ores/venomite.png", 32, 32, 32));
-        registrar.RegisterItem(new ItemDef(frostcoreItemId, "Frostcore", PackId, "packs/basegame/assets/world/nature/ores/frostcore.png", 32, 32, 32));
+        registrar.RegisterItem(new ItemDef(voiditeItemId, "Voidite", PackId, "packs/basegame/assets/items/resources/voidite_item.png", 16, 16, 32));
+        registrar.RegisterItem(new ItemDef(goldveinItemId, "Goldvein", PackId, "packs/basegame/assets/items/resources/goldvein_item.png", 16, 16, 32));
+        registrar.RegisterItem(new ItemDef(venomiteItemId, "Venomite", PackId, "packs/basegame/assets/items/resources/venomite_item.png", 16, 16, 32));
+        registrar.RegisterItem(new ItemDef(frostcoreItemId, "Frostcore", PackId, "packs/basegame/assets/items/resources/frostcore_item.png", 16, 16, 32));
         registrar.RegisterItem(new ItemDef(furnaceItemId, "Furnace", PackId, "packs/basegame/assets/items/resources/furnace_item.png", 16, 16, 8, furnacePlaceableId));
         registrar.RegisterItem(new ItemDef(voidCrystalItemId, "Void Crystal", PackId, "packs/basegame/assets/items/resources/void_crystal.png", 16, 16, 32));
         registrar.RegisterItem(new ItemDef(goldIngotItemId, "Gold Ingot", PackId, "packs/basegame/assets/items/resources/gold_ingot.png", 16, 16, 32));
