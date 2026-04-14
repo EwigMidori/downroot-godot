@@ -15,9 +15,10 @@ public sealed class WorldEntityState
         ChunkCoord chunkCoord,
         bool isNatural = false,
         string? stableNaturalEntityId = null,
-        int stackCount = 1)
+        int stackCount = 1,
+        EntityId? entityId = null)
     {
-        Id = EntityId.New();
+        Id = entityId ?? EntityId.New();
         Kind = kind;
         DefinitionId = definitionId;
         Position = position;
@@ -44,4 +45,26 @@ public sealed class WorldEntityState
     public float DamageAccumulator { get; set; }
     public float AiAccumulator { get; set; }
     public float HitFlashSeconds { get; set; }
+
+    public WorldEntityState Clone()
+    {
+        return new WorldEntityState(
+            Kind,
+            DefinitionId,
+            Position,
+            Durability,
+            WorldSpaceKind,
+            ChunkCoord,
+            IsNatural,
+            StableNaturalEntityId,
+            StackCount,
+            Id)
+        {
+            Removed = Removed,
+            OpenState = OpenState,
+            DamageAccumulator = DamageAccumulator,
+            AiAccumulator = AiAccumulator,
+            HitFlashSeconds = HitFlashSeconds
+        };
+    }
 }

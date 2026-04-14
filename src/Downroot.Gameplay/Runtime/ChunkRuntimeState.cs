@@ -9,15 +9,11 @@ public sealed class ChunkRuntimeState
     private readonly Dictionary<string, WorldEntityState> _naturalEntities;
     private readonly Dictionary<EntityId, WorldEntityState> _runtimeEntities;
 
-    public ChunkRuntimeState(GeneratedChunk generatedChunk, IReadOnlyDictionary<string, WorldEntityState>? naturalEntities = null, IReadOnlyDictionary<EntityId, WorldEntityState>? runtimeEntities = null)
+    public ChunkRuntimeState(GeneratedChunk generatedChunk)
     {
         GeneratedChunk = generatedChunk;
-        _naturalEntities = naturalEntities is null
-            ? new Dictionary<string, WorldEntityState>(StringComparer.Ordinal)
-            : new Dictionary<string, WorldEntityState>(naturalEntities, StringComparer.Ordinal);
-        _runtimeEntities = runtimeEntities is null
-            ? new Dictionary<EntityId, WorldEntityState>()
-            : new Dictionary<EntityId, WorldEntityState>(runtimeEntities);
+        _naturalEntities = new Dictionary<string, WorldEntityState>(StringComparer.Ordinal);
+        _runtimeEntities = new Dictionary<EntityId, WorldEntityState>();
     }
 
     public GeneratedChunk GeneratedChunk { get; }
@@ -52,11 +48,35 @@ public sealed class ChunkRuntimeState
 
     public bool TakeRuntimeEntity(EntityId entityId, out WorldEntityState? entity) => _runtimeEntities.Remove(entityId, out entity);
 
-    public ChunkRuntimeState CreateArchiveCopy()
+    public ChunkRuntimeArchive CreateArchive()
     {
-        var copy = new ChunkRuntimeState(GeneratedChunk, _naturalEntities, _runtimeEntities);
-        copy.DestroyedNaturalEntityIds.UnionWith(DestroyedNaturalEntityIds);
-        copy.CollectedNaturalDropIds.UnionWith(CollectedNaturalDropIds);
-        return copy;
+        return new ChunkRuntimeArchive(
+            DestroyedNaturalEntityIds.ToArray(),
+            CollectedNaturalDropIds.ToArray(),
+            _runtimeEntities.Values
+                .Where(entity => !entity.Removed)
+                .Select(entity => entity.Clone())
+                .ToArray());
+    }
+
+    public void ApplyArchive(ChunkRuntimeArchive archive)
+    {
+        DestroyedNaturalEntityIds.UnionWith(archive.DestroyedNaturalEntityIds);
+        CollectedNaturalDropIds.UnionWith(archive.CollectedNaturalDropIds);
+
+        foreach (var destroyedNaturalEntityId in archive.DestroyedNaturalEntityIds)
+        {
+            _naturalEntities.Remove(destroyedNaturalEntityId);
+        }
+
+        foreach (var runtimeEntity in archive.RuntimeEntities.Where(entity => !entity.Removed))
+        {
+            _runtimeEntities[runtimeEntity.Id] = runtimeEntity.Clone();
+        }
     }
 }
+
+public sealed record ChunkRuntimeArchive(
+    IReadOnlyCollection<string> DestroyedNaturalEntityIds,
+    IReadOnlyCollection<string> CollectedNaturalDropIds,
+    IReadOnlyCollection<WorldEntityState> RuntimeEntities);

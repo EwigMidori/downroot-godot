@@ -7,7 +7,7 @@ namespace Downroot.Gameplay.Runtime;
 public sealed class LoadedWorldState
 {
     private readonly Dictionary<ChunkCoord, ChunkRuntimeState> _loadedChunks = [];
-    private readonly Dictionary<ChunkCoord, ChunkRuntimeState> _archivedChunks = [];
+    private readonly Dictionary<ChunkCoord, ChunkRuntimeArchive> _archivedChunks = [];
 
     public LoadedWorldState(WorldModel model, int loadRadius)
     {
@@ -34,20 +34,20 @@ public sealed class LoadedWorldState
             return;
         }
 
+        var chunk = initializeChunk(generatedChunk);
         if (_archivedChunks.Remove(generatedChunk.Coord, out var archived))
         {
-            _loadedChunks.Add(generatedChunk.Coord, archived);
-            return;
+            chunk.ApplyArchive(archived);
         }
 
-        _loadedChunks.Add(generatedChunk.Coord, initializeChunk(generatedChunk));
+        _loadedChunks.Add(generatedChunk.Coord, chunk);
     }
 
     public void UnloadChunk(ChunkCoord coord)
     {
         if (_loadedChunks.Remove(coord, out var chunk))
         {
-            _archivedChunks[coord] = chunk.CreateArchiveCopy();
+            _archivedChunks[coord] = chunk.CreateArchive();
         }
     }
 
