@@ -60,18 +60,7 @@ public sealed class ChunkRuntimeState
 
     public SavedChunkRuntimeData ToSavedData()
     {
-        return new SavedChunkRuntimeData
-        {
-            ChunkX = GeneratedChunk.Coord.X,
-            ChunkY = GeneratedChunk.Coord.Y,
-            DestroyedNaturalEntityIds = DestroyedNaturalEntityIds.OrderBy(id => id).ToArray(),
-            CollectedNaturalDropIds = CollectedNaturalDropIds.OrderBy(id => id).ToArray(),
-            RemovedRaisedFeatureTiles = RemovedRaisedFeatureTiles.Select(tile => $"{tile.X},{tile.Y}").OrderBy(value => value).ToArray(),
-            RuntimeEntities = _runtimeEntities.Values
-                .Where(entity => !entity.Removed)
-                .Select(ToSavedRuntimeEntity)
-                .ToArray()
-        };
+        return ToSavedData(GeneratedChunk.Coord, CreateArchive());
     }
 
     public ChunkRuntimeArchive CreateArchive()
@@ -112,11 +101,31 @@ public sealed class ChunkRuntimeState
             savedChunk.RuntimeEntities.Select(FromSavedRuntimeEntity).ToArray());
     }
 
-    private static SavedRuntimeEntityData ToSavedRuntimeEntity(WorldEntityState entity)
+    internal static SavedChunkRuntimeData ToSavedData(ChunkCoord coord, ChunkRuntimeArchive archive)
+    {
+        return new SavedChunkRuntimeData
+        {
+            ChunkX = coord.X,
+            ChunkY = coord.Y,
+            DestroyedNaturalEntityIds = archive.DestroyedNaturalEntityIds.OrderBy(id => id).ToArray(),
+            CollectedNaturalDropIds = archive.CollectedNaturalDropIds.OrderBy(id => id).ToArray(),
+            RemovedRaisedFeatureTiles = archive.RemovedRaisedFeatureTiles
+                .Select(tile => $"{tile.X},{tile.Y}")
+                .OrderBy(value => value)
+                .ToArray(),
+            RuntimeEntities = archive.RuntimeEntities
+                .Where(entity => !entity.Removed)
+                .Select(ToSavedRuntimeEntity)
+                .ToArray()
+        };
+    }
+
+    internal static SavedRuntimeEntityData ToSavedRuntimeEntity(WorldEntityState entity)
     {
         return new SavedRuntimeEntityData
         {
             EntityId = entity.Id.Value.ToByteArray().AsSpan(0, 8).ToArray().Aggregate(0L, (current, next) => (current << 8) | next),
+            EntityGuid = entity.Id.Value.ToString("N"),
             EntityKind = entity.Kind.ToString(),
             DefinitionId = entity.DefinitionId.Value,
             PositionX = entity.Position.X,
@@ -145,6 +154,7 @@ public sealed class ChunkRuntimeState
     {
         var worldSpaceKind = Enum.Parse<WorldSpaceKind>(savedEntity.WorldSpaceKind, ignoreCase: true);
         var entityKind = Enum.Parse<WorldEntityKind>(savedEntity.EntityKind, ignoreCase: true);
+        var entityId = RestoreEntityId(savedEntity);
         var entity = new WorldEntityState(
             entityKind,
             new ContentId(savedEntity.DefinitionId),
@@ -154,7 +164,8 @@ public sealed class ChunkRuntimeState
             new ChunkCoord(savedEntity.ChunkX, savedEntity.ChunkY),
             savedEntity.IsNatural,
             savedEntity.StableNaturalEntityId,
-            savedEntity.StackCount)
+            savedEntity.StackCount,
+            entityId)
         {
             Removed = savedEntity.Removed,
             OpenState = savedEntity.OpenState
@@ -172,6 +183,25 @@ public sealed class ChunkRuntimeState
         }
 
         return entity;
+    }
+
+    private static EntityId RestoreEntityId(SavedRuntimeEntityData savedEntity)
+    {
+        if (!string.IsNullOrWhiteSpace(savedEntity.EntityGuid)
+            && Guid.TryParse(savedEntity.EntityGuid, out var persistedGuid))
+        {
+            return new EntityId(persistedGuid);
+        }
+
+        Span<byte> bytes = stackalloc byte[16];
+        var legacy = savedEntity.EntityId;
+        for (var index = 7; index >= 0; index--)
+        {
+            bytes[index] = (byte)(legacy & 0xFF);
+            legacy >>= 8;
+        }
+
+        return new EntityId(new Guid(bytes));
     }
 
     private static WorldTileCoord ParseTile(string value)

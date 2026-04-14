@@ -204,37 +204,7 @@ public sealed class LoadedWorldState
         var persisted = new Dictionary<ChunkCoord, SavedChunkRuntimeData>();
         foreach (var archived in _archivedChunks)
         {
-            persisted[archived.Key] = new SavedChunkRuntimeData
-            {
-                ChunkX = archived.Key.X,
-                ChunkY = archived.Key.Y,
-                DestroyedNaturalEntityIds = archived.Value.DestroyedNaturalEntityIds.ToArray(),
-                CollectedNaturalDropIds = archived.Value.CollectedNaturalDropIds.ToArray(),
-                RemovedRaisedFeatureTiles = archived.Value.RemovedRaisedFeatureTiles.Select(tile => $"{tile.X},{tile.Y}").ToArray(),
-                RuntimeEntities = archived.Value.RuntimeEntities.Select(entity => new SavedRuntimeEntityData
-                {
-                    EntityId = entity.Id.Value.ToByteArray().AsSpan(0, 8).ToArray().Aggregate(0L, (current, next) => (current << 8) | next),
-                    EntityKind = entity.Kind.ToString(),
-                    DefinitionId = entity.DefinitionId.Value,
-                    PositionX = entity.Position.X,
-                    PositionY = entity.Position.Y,
-                    Durability = entity.Durability,
-                    WorldSpaceKind = entity.WorldSpaceKind.ToString(),
-                    ChunkX = entity.ChunkCoord.X,
-                    ChunkY = entity.ChunkCoord.Y,
-                    IsNatural = entity.IsNatural,
-                    StableNaturalEntityId = entity.StableNaturalEntityId,
-                    StackCount = entity.StackCount,
-                    Removed = entity.Removed,
-                    OpenState = entity.OpenState,
-                    StorageInventorySlots = entity.StorageInventory?.Slots.Select((slot, index) => new SavedInventorySlotData
-                    {
-                        SlotIndex = index,
-                        ItemId = slot.ItemId?.Value,
-                        Quantity = slot.Quantity
-                    }).ToArray()
-                }).ToArray()
-            };
+            persisted[archived.Key] = ChunkRuntimeState.ToSavedData(archived.Key, archived.Value);
         }
 
         foreach (var chunk in _loadedChunks.Values)
@@ -256,10 +226,27 @@ public sealed class LoadedWorldState
     public void ImportPersistedChunks(IEnumerable<SavedChunkRuntimeData> chunks)
     {
         _archivedChunks.Clear();
+        var updatedLoadedChunks = false;
         foreach (var chunk in chunks)
         {
             var coord = new ChunkCoord(chunk.ChunkX, chunk.ChunkY);
-            _archivedChunks[coord] = ChunkRuntimeState.CreateArchive(chunk);
+            var archive = ChunkRuntimeState.CreateArchive(chunk);
+            if (_loadedChunks.TryGetValue(coord, out var loadedChunk))
+            {
+                RemoveChunkEntitiesFromIndexes(loadedChunk);
+                loadedChunk.ApplyArchive(archive);
+                IndexChunkEntities(loadedChunk);
+                updatedLoadedChunks = true;
+                continue;
+            }
+
+            _archivedChunks[coord] = archive;
+        }
+
+        if (updatedLoadedChunks)
+        {
+            IncrementChunkVisualVersion();
+            IncrementEntityStructureVersion();
         }
     }
 

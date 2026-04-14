@@ -26,6 +26,7 @@ public partial class GameRoot : Node2D
     private Action? _reloadAction;
     private bool _initialized;
     private bool _previousDebugToggleHeld;
+    private bool _previousManualSaveHeld;
 
     public GameRuntime Runtime => _runtime ?? throw new InvalidOperationException("GameRoot has not been configured.");
     public GameSimulation Simulation => _simulation ?? throw new InvalidOperationException("GameRoot has not been configured.");
@@ -114,6 +115,14 @@ public partial class GameRoot : Node2D
             _debugPanel?.ToggleVisibility();
         }
         _previousDebugToggleHeld = debugToggleHeld;
+
+        var manualSaveHeld = Input.IsKeyPressed(Key.F5);
+        if (manualSaveHeld && !_previousManualSaveHeld)
+        {
+            _saveAction?.Invoke();
+            GD.Print("[Save] Manual save completed.");
+        }
+        _previousManualSaveHeld = manualSaveHeld;
 
         var frame = _inputService.CaptureFrame();
         using (RuntimeProfiler.Measure("GameRoot.Simulation"))

@@ -3,6 +3,7 @@ namespace Downroot.Core.Save;
 public sealed class SavedRuntimeEntityData
 {
     public long EntityId { get; set; }
+    public string? EntityGuid { get; set; }
     public string EntityKind { get; set; } = string.Empty;
     public string DefinitionId { get; set; } = string.Empty;
     public float PositionX { get; set; }
