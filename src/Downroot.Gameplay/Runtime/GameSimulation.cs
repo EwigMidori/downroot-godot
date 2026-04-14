@@ -1,4 +1,5 @@
 using Downroot.Core.Definitions;
+using Downroot.Core.Diagnostics;
 using Downroot.Core.Gameplay;
 using Downroot.Core.Ids;
 using Downroot.Core.Input;
@@ -43,46 +44,135 @@ public sealed class GameSimulation
 
     public void Tick(float deltaSeconds, InputFrame input)
     {
+        using var tickScope = RuntimeProfiler.Measure("GameSimulation.Tick");
         if (!input.DestroyHeld)
         {
             _suppressDestroyUntilRelease = false;
         }
 
-        _runtime.WorldState.TickStatusEvent(deltaSeconds);
-        UpdateWorldTime(deltaSeconds);
+        using (RuntimeProfiler.Measure("GameSimulation.Status"))
+        {
+            _runtime.WorldState.TickStatusEvent(deltaSeconds);
+        }
+
+        using (RuntimeProfiler.Measure("GameSimulation.WorldTime"))
+        {
+            UpdateWorldTime(deltaSeconds);
+        }
+
         if (_runtime.WorldState.Travel.IsActive)
         {
-            _portalTravelSystem.TickTravel(deltaSeconds);
-            _worldFacade.RemoveDeleted();
+            using (RuntimeProfiler.Measure("GameSimulation.Travel"))
+            {
+                _portalTravelSystem.TickTravel(deltaSeconds);
+            }
+
+            using (RuntimeProfiler.Measure("GameSimulation.RemoveDeleted"))
+            {
+                _worldFacade.RemoveDeleted();
+            }
+
             _previousDestroyHeld = input.DestroyHeld;
             return;
         }
 
-        _worldStreamingSystem.UpdateLoadedChunks();
-        _worldFacade.EnsureEntityProjectionCurrent();
-        _interactionSystem.ValidateActiveStation();
-        _movementSystem.UpdatePlayerMovement(deltaSeconds, input.Movement);
-        UpdateHotbarSelection(input);
-        _craftingSystem.UpdateFurnaceTask(deltaSeconds);
-        _interactionSystem.UpdateInteractionContext();
-        HandleToggles(input);
-        _interactionSystem.HandleInteract(input);
+        using (RuntimeProfiler.Measure("GameSimulation.Streaming"))
+        {
+            _worldStreamingSystem.UpdateLoadedChunks();
+        }
+
+        using (RuntimeProfiler.Measure("GameSimulation.ProjectionEnsureA"))
+        {
+            _worldFacade.EnsureEntityProjectionCurrent();
+        }
+
+        using (RuntimeProfiler.Measure("GameSimulation.ValidateStation"))
+        {
+            _interactionSystem.ValidateActiveStation();
+        }
+
+        using (RuntimeProfiler.Measure("GameSimulation.PlayerMove"))
+        {
+            _movementSystem.UpdatePlayerMovement(deltaSeconds, input.Movement);
+        }
+
+        using (RuntimeProfiler.Measure("GameSimulation.Hotbar"))
+        {
+            UpdateHotbarSelection(input);
+        }
+
+        using (RuntimeProfiler.Measure("GameSimulation.FurnaceTick"))
+        {
+            _craftingSystem.UpdateFurnaceTask(deltaSeconds);
+        }
+
+        using (RuntimeProfiler.Measure("GameSimulation.InteractionContextA"))
+        {
+            _interactionSystem.UpdateInteractionContext();
+        }
+
+        using (RuntimeProfiler.Measure("GameSimulation.Toggles"))
+        {
+            HandleToggles(input);
+        }
+
+        using (RuntimeProfiler.Measure("GameSimulation.Interact"))
+        {
+            _interactionSystem.HandleInteract(input);
+        }
+
         var selectedItemDef = GetSelectedItemDef();
         var nearestCreature = _creatureSystem.GetNearestCreature(AttackRange);
-        HandleAttack(input, selectedItemDef, nearestCreature);
-        HandleConsumption(input);
-        _placementSystem.HandlePlacement(input);
-        _destroySystem.HandleDestroy(
-            deltaSeconds,
-            input,
-            _suppressDestroyUntilRelease,
-            selectedItemDef?.MeleeDamage is > 0 && nearestCreature is not null,
-            selectedItemDef);
-        _creatureSystem.UpdateCreatures(deltaSeconds);
-        _worldStreamingSystem.ReassignRuntimeEntities();
-        _worldFacade.EnsureEntityProjectionCurrent();
-        _interactionSystem.UpdateInteractionContext();
-        _runtime.WorldState.RemoveDeleted();
+        using (RuntimeProfiler.Measure("GameSimulation.Attack"))
+        {
+            HandleAttack(input, selectedItemDef, nearestCreature);
+        }
+
+        using (RuntimeProfiler.Measure("GameSimulation.Consume"))
+        {
+            HandleConsumption(input);
+        }
+
+        using (RuntimeProfiler.Measure("GameSimulation.Place"))
+        {
+            _placementSystem.HandlePlacement(input);
+        }
+
+        using (RuntimeProfiler.Measure("GameSimulation.Destroy"))
+        {
+            _destroySystem.HandleDestroy(
+                deltaSeconds,
+                input,
+                _suppressDestroyUntilRelease,
+                selectedItemDef?.MeleeDamage is > 0 && nearestCreature is not null,
+                selectedItemDef);
+        }
+
+        using (RuntimeProfiler.Measure("GameSimulation.Creatures"))
+        {
+            _creatureSystem.UpdateCreatures(deltaSeconds);
+        }
+
+        using (RuntimeProfiler.Measure("GameSimulation.ReassignRuntimeEntities"))
+        {
+            _worldStreamingSystem.ReassignRuntimeEntities();
+        }
+
+        using (RuntimeProfiler.Measure("GameSimulation.ProjectionEnsureB"))
+        {
+            _worldFacade.EnsureEntityProjectionCurrent();
+        }
+
+        using (RuntimeProfiler.Measure("GameSimulation.InteractionContextB"))
+        {
+            _interactionSystem.UpdateInteractionContext();
+        }
+
+        using (RuntimeProfiler.Measure("GameSimulation.RemoveDeleted"))
+        {
+            _runtime.WorldState.RemoveDeleted();
+        }
+
         _previousDestroyHeld = input.DestroyHeld;
     }
 

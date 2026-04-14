@@ -1,4 +1,5 @@
 using Downroot.Core.World;
+using Downroot.Core.Diagnostics;
 using Downroot.Gameplay.Bootstrap;
 
 namespace Downroot.Gameplay.Runtime.Systems;
@@ -7,6 +8,7 @@ public sealed class WorldStreamingSystem(GameRuntime runtime, WorldRuntimeFacade
 {
     public bool UpdateLoadedChunks()
     {
+        using var scope = RuntimeProfiler.Measure("WorldStreaming.UpdateLoadedChunks");
         var world = worldFacade.GetActiveWorld();
         var centerChunk = worldFacade.GetChunkCoord(runtime.Player.Position);
         return UpdateLoadedChunksForWorldCore(world, centerChunk);
@@ -14,11 +16,13 @@ public sealed class WorldStreamingSystem(GameRuntime runtime, WorldRuntimeFacade
 
     public bool UpdateLoadedChunksForWorld(LoadedWorldState world, WorldTileCoord aroundTile)
     {
+        using var scope = RuntimeProfiler.Measure("WorldStreaming.UpdateLoadedChunksForWorld");
         return UpdateLoadedChunksForWorldCore(world, aroundTile.ToChunkCoord(runtime.ChunkWidth, runtime.ChunkHeight));
     }
 
     public bool ReassignRuntimeEntities()
     {
+        using var scope = RuntimeProfiler.Measure("WorldStreaming.ReassignRuntimeEntities");
         var world = worldFacade.GetActiveWorld();
         var moved = false;
         foreach (var sourceChunk in world.LoadedChunks.Values.ToArray())
@@ -50,6 +54,7 @@ public sealed class WorldStreamingSystem(GameRuntime runtime, WorldRuntimeFacade
 
     private bool UpdateLoadedChunksForWorldCore(LoadedWorldState world, ChunkCoord centerChunk)
     {
+        using var scope = RuntimeProfiler.Measure("WorldStreaming.UpdateLoadedChunksCore");
         var desired = new HashSet<ChunkCoord>();
         var changed = false;
 

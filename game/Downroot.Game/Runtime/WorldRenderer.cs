@@ -2,6 +2,7 @@ using Downroot.Core.Definitions;
 using Downroot.Core.Ids;
 using Downroot.Core.Input;
 using Downroot.Core.World;
+using Downroot.Core.Diagnostics;
 using Downroot.Game.Infrastructure;
 using Downroot.Gameplay.Runtime;
 using Godot;
@@ -63,28 +64,47 @@ public sealed partial class WorldRenderer : Node2D
 
     public void Update(InputFrame frame)
     {
+        using var updateScope = RuntimeProfiler.Measure("WorldRenderer.Update");
         if (_runtime is null || _playerBody is null || _playerSprite is null)
         {
             return;
         }
 
-        _runtime.WorldState.EnsureEntityProjectionCurrent();
-        _playerBody.Position = ToGodot(_runtime.Player.Position);
-        _playerBody.Velocity = ToGodot(frame.Movement * _runtime.Player.Speed);
-        _playerBody.ZIndex = ResolvePlayerZIndex();
-        if (frame.Movement != NumericsVector2.Zero)
+        using (RuntimeProfiler.Measure("WorldRenderer.ProjectionEnsure"))
         {
-            _lastFacing = ResolveFacing(frame.Movement);
-            _playerSprite.Play($"run_{_lastFacing}");
-        }
-        else
-        {
-            _playerSprite.Play($"idle_{_lastFacing}");
+            _runtime.WorldState.EnsureEntityProjectionCurrent();
         }
 
-        SynchronizeWorldVisuals();
-        RefreshDirtyRaisedFeatures();
-        UpdateEntitySprites();
+        using (RuntimeProfiler.Measure("WorldRenderer.Player"))
+        {
+            _playerBody.Position = ToGodot(_runtime.Player.Position);
+            _playerBody.Velocity = ToGodot(frame.Movement * _runtime.Player.Speed);
+            _playerBody.ZIndex = ResolvePlayerZIndex();
+            if (frame.Movement != NumericsVector2.Zero)
+            {
+                _lastFacing = ResolveFacing(frame.Movement);
+                _playerSprite.Play($"run_{_lastFacing}");
+            }
+            else
+            {
+                _playerSprite.Play($"idle_{_lastFacing}");
+            }
+        }
+
+        using (RuntimeProfiler.Measure("WorldRenderer.SyncWorldVisuals"))
+        {
+            SynchronizeWorldVisuals();
+        }
+
+        using (RuntimeProfiler.Measure("WorldRenderer.RefreshRaised"))
+        {
+            RefreshDirtyRaisedFeatures();
+        }
+
+        using (RuntimeProfiler.Measure("WorldRenderer.UpdateEntitySprites"))
+        {
+            UpdateEntitySprites();
+        }
     }
 
     public void ValidateContentLoads(GameRuntime runtime)

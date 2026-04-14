@@ -1,5 +1,6 @@
 using Downroot.Core.Ids;
 using Downroot.Core.Input;
+using Downroot.Core.Diagnostics;
 using Downroot.Game.Infrastructure;
 using Downroot.Gameplay.Bootstrap;
 using Downroot.Gameplay.Runtime;
@@ -30,6 +31,7 @@ public partial class GameRoot : Node2D
             GameInputMapInstaller.Install();
 
             _startupOverlay.UpdateStatus("Bootstrapping runtime");
+            RuntimeProfiler.Configure(message => GD.Print(message), frameWindow: 60);
             _runtime = new GameBootstrapper().Bootstrap();
             _simulation = new GameSimulation(_runtime);
 
@@ -77,11 +79,30 @@ public partial class GameRoot : Node2D
             return;
         }
 
+        RuntimeProfiler.BeginFrame();
+        using var frameScope = RuntimeProfiler.Measure("GameRoot.PhysicsProcess");
         var frame = _inputService.CaptureFrame();
-        _simulation.Tick((float)delta, frame);
-        _worldRenderer.Update(frame);
-        _hudController.Refresh(_runtime, _worldRenderer.WorldToScreen);
-        UpdateTravelOverlay();
+        using (RuntimeProfiler.Measure("GameRoot.Simulation"))
+        {
+            _simulation.Tick((float)delta, frame);
+        }
+
+        using (RuntimeProfiler.Measure("GameRoot.Renderer"))
+        {
+            _worldRenderer.Update(frame);
+        }
+
+        using (RuntimeProfiler.Measure("GameRoot.Hud"))
+        {
+            _hudController.Refresh(_runtime, _worldRenderer.WorldToScreen);
+        }
+
+        using (RuntimeProfiler.Measure("GameRoot.Overlay"))
+        {
+            UpdateTravelOverlay();
+        }
+
+        RuntimeProfiler.EndFrame();
     }
 
     private void InitializeTravelOverlay()

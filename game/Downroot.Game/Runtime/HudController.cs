@@ -1,4 +1,5 @@
 using Downroot.Core.Ids;
+using Downroot.Core.Diagnostics;
 using Downroot.Game.Infrastructure;
 using Downroot.Gameplay.Runtime;
 using Downroot.UI.Presentation;
@@ -54,13 +55,41 @@ public sealed class HudController
 
     public void Refresh(GameRuntime runtime, Func<NumericsVector2, Vector2> worldToScreen)
     {
-        RefreshHudStatus(runtime);
-        RefreshHotbar(runtime);
-        RefreshCraftingPanel(runtime);
-        RefreshInteractionPrompt(runtime);
-        RefreshStatusBanner(runtime);
-        RefreshLayout(runtime);
-        RefreshDestroyProgress(runtime, worldToScreen);
+        using var refreshScope = RuntimeProfiler.Measure("HudController.Refresh");
+        using (RuntimeProfiler.Measure("HudController.HudStatus"))
+        {
+            RefreshHudStatus(runtime);
+        }
+
+        using (RuntimeProfiler.Measure("HudController.Hotbar"))
+        {
+            RefreshHotbar(runtime);
+        }
+
+        using (RuntimeProfiler.Measure("HudController.Crafting"))
+        {
+            RefreshCraftingPanel(runtime);
+        }
+
+        using (RuntimeProfiler.Measure("HudController.InteractionPrompt"))
+        {
+            RefreshInteractionPrompt(runtime);
+        }
+
+        using (RuntimeProfiler.Measure("HudController.StatusBanner"))
+        {
+            RefreshStatusBanner(runtime);
+        }
+
+        using (RuntimeProfiler.Measure("HudController.Layout"))
+        {
+            RefreshLayout(runtime);
+        }
+
+        using (RuntimeProfiler.Measure("HudController.DestroyProgress"))
+        {
+            RefreshDestroyProgress(runtime, worldToScreen);
+        }
     }
 
     private void RefreshHudStatus(GameRuntime runtime)
