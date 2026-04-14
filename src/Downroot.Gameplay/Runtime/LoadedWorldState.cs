@@ -182,7 +182,15 @@ public sealed class LoadedWorldState
         if (_loadedChunks.Remove(coord, out var chunk))
         {
             RemoveChunkEntitiesFromIndexes(chunk);
-            _archivedChunks[coord] = chunk.CreateArchive();
+            if (chunk.HasPersistentState())
+            {
+                _archivedChunks[coord] = chunk.CreateArchive();
+            }
+            else
+            {
+                _archivedChunks.Remove(coord);
+            }
+
             IncrementChunkVisualVersion();
             IncrementEntityStructureVersion();
         }

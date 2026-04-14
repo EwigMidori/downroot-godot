@@ -49,6 +49,14 @@ public sealed class ChunkRuntimeState
 
     public bool TakeRuntimeEntity(EntityId entityId, out WorldEntityState? entity) => _runtimeEntities.Remove(entityId, out entity);
 
+    public bool HasPersistentState()
+    {
+        return DestroyedNaturalEntityIds.Count > 0
+            || CollectedNaturalDropIds.Count > 0
+            || RemovedRaisedFeatureTiles.Count > 0
+            || _runtimeEntities.Values.Any(entity => !entity.Removed);
+    }
+
     public ChunkRuntimeArchive CreateArchive()
     {
         return new ChunkRuntimeArchive(
