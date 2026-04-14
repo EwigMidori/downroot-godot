@@ -51,6 +51,10 @@ public sealed partial class HudView : CanvasLayer
     public Label CraftInventoryTitleLabel { get; }
     public HFlowContainer CraftInventoryGrid { get; }
     public IReadOnlyList<SlotParts> InventorySlots { get; }
+    public VBoxContainer StorageRegion { get; }
+    public Label StorageTitleLabel { get; }
+    public HFlowContainer StorageGrid { get; }
+    public IReadOnlyList<SlotParts> StorageSlots { get; }
 
     public HudView()
     {
@@ -197,7 +201,8 @@ public sealed partial class HudView : CanvasLayer
             Name = "RecipeListScroll",
             CustomMinimumSize = new Vector2(0, 260),
             HorizontalScrollMode = ScrollContainer.ScrollMode.Disabled,
-            SizeFlagsHorizontal = Control.SizeFlags.ExpandFill
+            SizeFlagsHorizontal = Control.SizeFlags.ExpandFill,
+            FocusMode = Control.FocusModeEnum.None
         };
         recipeRegion.AddChild(RecipeListScroll);
         RecipeListContainer = new VBoxContainer
@@ -228,6 +233,29 @@ public sealed partial class HudView : CanvasLayer
         {
             var slot = CreateSlot(index == 0 ? "InventorySlotWidget" : $"InventorySlotWidget{index + 1}", 42, false);
             CraftInventoryGrid.AddChild(slot.SlotRoot);
+            return slot;
+        }).ToArray();
+
+        StorageRegion = new VBoxContainer { Name = "StorageRegion", Visible = false };
+        SetSeparation(StorageRegion, 8);
+        craftBody.AddChild(StorageRegion);
+        StorageTitleLabel = new Label
+        {
+            Name = "StorageTitleLabel",
+            Text = "Storage"
+        };
+        StorageRegion.AddChild(StorageTitleLabel);
+        StorageGrid = new HFlowContainer
+        {
+            Name = "StorageGrid",
+            SizeFlagsHorizontal = Control.SizeFlags.ExpandFill
+        };
+        SetFlowSeparation(StorageGrid, 8, 8);
+        StorageRegion.AddChild(StorageGrid);
+        StorageSlots = Enumerable.Range(0, 16).Select(index =>
+        {
+            var slot = CreateSlot(index == 0 ? "StorageSlotWidget" : $"StorageSlotWidget{index + 1}", 42, false);
+            StorageGrid.AddChild(slot.SlotRoot);
             return slot;
         }).ToArray();
 
@@ -324,7 +352,8 @@ public sealed partial class HudView : CanvasLayer
             Name = "RecipeCraftButton",
             Text = "Craft",
             CustomMinimumSize = new Vector2(72, 32),
-            MouseFilter = Control.MouseFilterEnum.Stop
+            MouseFilter = Control.MouseFilterEnum.Stop,
+            FocusMode = Control.FocusModeEnum.None
         };
         craftButton.Pressed += () => onCraft(recipe.RecipeId);
         topRow.AddChild(craftButton);
@@ -444,7 +473,9 @@ public sealed partial class HudView : CanvasLayer
         var slotRoot = new Control
         {
             Name = name,
-            CustomMinimumSize = new Vector2(size, size)
+            CustomMinimumSize = new Vector2(size, size),
+            FocusMode = Control.FocusModeEnum.None,
+            MouseFilter = Control.MouseFilterEnum.Stop
         };
 
         var background = new Panel

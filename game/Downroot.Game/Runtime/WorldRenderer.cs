@@ -474,7 +474,7 @@ public sealed partial class WorldRenderer : Node2D
         var texture = entity.Kind switch
         {
             WorldEntityKind.ResourceNode => ResolveResourceNodeTexture(runtime.Content.ResourceNodes.Get(entity.DefinitionId)),
-            WorldEntityKind.Placeable => ResolvePlaceableTexture(runtime.Content.Placeables.Get(entity.DefinitionId), entity.OpenState),
+            WorldEntityKind.Placeable => ResolvePlaceableTexture(entity, runtime.Content.Placeables.Get(entity.DefinitionId), entity.OpenState),
             WorldEntityKind.Creature => ResolveCreatureTexture(runtime.Content.Creatures.Get(entity.DefinitionId)),
             WorldEntityKind.ItemDrop => ResolveItemTexture(runtime.Content.Items.Get(entity.DefinitionId)),
             _ => throw new InvalidOperationException($"Unsupported entity kind '{entity.Kind}'.")
@@ -503,9 +503,108 @@ public sealed partial class WorldRenderer : Node2D
 
     private Texture2D ResolveItemTexture(ItemDef itemDef) => ResolveCachedTexture($"item:{itemDef.Id.Value}", () => _textureLoader.LoadItem(itemDef).Texture);
 
+    private Texture2D ResolvePlaceableTexture(WorldEntityState entity, PlaceableDef placeableDef, bool isOpen)
+    {
+        if (placeableDef.ConnectsToSameNeighbors)
+        {
+            return ResolveConnectedPlaceableTexture(entity, placeableDef, isOpen);
+        }
+
+        return ResolveCachedTexture($"placeable:{placeableDef.Id.Value}:{isOpen}", () => _textureLoader.LoadPlaceable(placeableDef, isOpen).Texture);
+    }
+
     private Texture2D ResolvePlaceableTexture(PlaceableDef placeableDef, bool isOpen)
     {
         return ResolveCachedTexture($"placeable:{placeableDef.Id.Value}:{isOpen}", () => _textureLoader.LoadPlaceable(placeableDef, isOpen).Texture);
+    }
+
+    private Texture2D ResolveConnectedPlaceableTexture(WorldEntityState entity, PlaceableDef placeableDef, bool isOpen)
+    {
+        var tile = _worldFacade!.GetWorldTile(entity.Position);
+        var north = HasMatchingConnectedNeighbor(entity, new WorldTileCoord(tile.X, tile.Y - 1));
+        var east = HasMatchingConnectedNeighbor(entity, new WorldTileCoord(tile.X + 1, tile.Y));
+        var south = HasMatchingConnectedNeighbor(entity, new WorldTileCoord(tile.X, tile.Y + 1));
+        var west = HasMatchingConnectedNeighbor(entity, new WorldTileCoord(tile.X - 1, tile.Y));
+        var variant = ResolveConnectedPlaceableVariant(north, east, south, west);
+        return ResolveCachedTexture(
+            $"placeable-connected:{placeableDef.Id.Value}:{variant}:{isOpen}",
+            () => _textureLoader.LoadTexture($"{placeableDef.Id.Value}:{variant}", $"{System.IO.Path.GetDirectoryName(placeableDef.SpritePath)!.Replace('\\', '/')}/{variant}.png").Texture);
+    }
+
+    private bool HasMatchingConnectedNeighbor(WorldEntityState entity, WorldTileCoord neighborTile)
+    {
+        foreach (var candidate in _runtime!.WorldState.Entities)
+        {
+            if (candidate.Id == entity.Id
+                || candidate.Removed
+                || candidate.Kind != WorldEntityKind.Placeable
+                || candidate.DefinitionId != entity.DefinitionId)
+            {
+                continue;
+            }
+
+            if (_worldFacade!.GetWorldTile(candidate.Position) == neighborTile)
+            {
+                return true;
+            }
+        }
+
+        return false;
+    }
+
+    private static string ResolveConnectedPlaceableVariant(bool north, bool east, bool south, bool west)
+    {
+        var connections = (north ? 1 : 0) + (east ? 1 : 0) + (south ? 1 : 0) + (west ? 1 : 0);
+        if (connections <= 0)
+        {
+            return "wood_fence_horizontal";
+        }
+
+        if (north && east && !south && !west)
+        {
+            return "wood_fence_corner_ne";
+        }
+
+        if (!north && east && south && !west)
+        {
+            return "wood_fence_corner_es";
+        }
+
+        if (!north && !east && south && west)
+        {
+            return "wood_fence_corner_sw";
+        }
+
+        if (north && !east && !south && west)
+        {
+            return "wood_fence_corner_wn";
+        }
+
+        if ((north || south) && !(east || west))
+        {
+            return "wood_fence_vertical";
+        }
+
+        if ((east || west) && !(north || south))
+        {
+            return east && !west
+                ? "wood_fence_end_east"
+                : west && !east
+                    ? "wood_fence_end_west"
+                    : "wood_fence_horizontal";
+        }
+
+        if (east && west)
+        {
+            return "wood_fence_horizontal";
+        }
+
+        if (north && south)
+        {
+            return "wood_fence_vertical";
+        }
+
+        return "wood_fence_horizontal";
     }
 
     private Texture2D ResolveResourceNodeTexture(ResourceNodeDef resourceNodeDef)

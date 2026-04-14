@@ -142,8 +142,29 @@ public sealed class DestroySystem(GameRuntime runtime, WorldRuntimeFacade worldF
             runtime.WorldState.WorkspaceMode = CraftWorkspaceMode.Hidden;
         }
 
+        if (runtime.WorldState.ActiveStorageEntityId == entity.Id)
+        {
+            runtime.WorldState.ActiveStorageEntityId = null;
+        }
+
         entity.Removed = true;
         worldFacade.NotifyEntityStateChanged(entity);
+
+        if (entity.StorageInventory is not null)
+        {
+            var worldTile = worldFacade.GetWorldTile(entity.Position);
+            foreach (var slot in entity.StorageInventory.Slots.Where(slot => slot.ItemId is not null && slot.Quantity > 0))
+            {
+                worldFacade.AddRuntimeEntity(entity.WorldSpaceKind, new WorldEntityState(
+                    WorldEntityKind.ItemDrop,
+                    slot.ItemId!.Value,
+                    entity.Position,
+                    1,
+                    entity.WorldSpaceKind,
+                    worldTile.ToChunkCoord(runtime.ChunkWidth, runtime.ChunkHeight),
+                    stackCount: slot.Quantity));
+            }
+        }
 
         switch (entity.Kind)
         {

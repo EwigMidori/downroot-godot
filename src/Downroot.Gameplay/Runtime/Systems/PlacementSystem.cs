@@ -30,13 +30,19 @@ public sealed class PlacementSystem(GameRuntime runtime, WorldRuntimeFacade worl
         }
 
         var placeableDef = runtime.Content.Placeables.Get(itemDef.PlaceableId.Value);
-        worldFacade.AddRuntimeEntity(runtime.ActiveWorldSpaceKind, new WorldEntityState(
+        var placedEntity = new WorldEntityState(
             WorldEntityKind.Placeable,
             placeableDef.Id,
             tile,
             placeableDef.MaxDurability,
             runtime.ActiveWorldSpaceKind,
-            tileCoord.ToChunkCoord(runtime.ChunkWidth, runtime.ChunkHeight)));
+            tileCoord.ToChunkCoord(runtime.ChunkWidth, runtime.ChunkHeight))
+        {
+            StorageInventory = placeableDef.StorageSlotCount > 0
+                ? new InventoryState(placeableDef.StorageSlotCount)
+                : null
+        };
+        worldFacade.AddRuntimeEntity(runtime.ActiveWorldSpaceKind, placedEntity);
         slot.Remove(1);
     }
 }

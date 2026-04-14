@@ -24,6 +24,7 @@ public sealed class HudController
     private DestroyProgressViewData? _lastDestroyProgress;
     private int? _lastHotbarSignature;
     private int? _lastInventorySignature;
+    private int? _lastStorageSignature;
     private string? _recipeStructureKey;
     private string? _recipeStateKey;
     private string? _lastLayoutKey;
@@ -50,6 +51,12 @@ public sealed class HudController
         {
             var inventoryIndex = index;
             _view.InventorySlots[index].SlotRoot.GuiInput += @event => OnInventorySlotInput(inventoryIndex, @event);
+        }
+
+        for (var index = 0; index < _view.StorageSlots.Count; index++)
+        {
+            var storageIndex = index;
+            _view.StorageSlots[index].SlotRoot.GuiInput += @event => OnStorageSlotInput(storageIndex, @event);
         }
     }
 
@@ -101,7 +108,7 @@ public sealed class HudController
         }
 
         _view.TimeOfDayLabel.Text = hudStatus.TimeOfDayLabel;
-        _view.NightOverlay.Color = new Color(0.03f, 0.05f, 0.15f, hudStatus.IsNight ? 0.32f : 0f);
+        _view.NightOverlay.Color = new Color(0.03f, 0.05f, 0.15f, hudStatus.NightOverlayAlpha);
         _view.HitOverlay.Color = new Color(0.85f, 0.08f, 0.08f, hudStatus.PlayerHitFlashAlpha);
         _view.SetBarValue(_view.HealthBarWidget, hudStatus.HealthPercent);
         _view.SetBarValue(_view.HungerBarWidget, hudStatus.HungerPercent);
@@ -129,32 +136,42 @@ public sealed class HudController
     private CraftingPanelViewData RefreshCraftingPanel(GameRuntime runtime)
     {
         var workspaceMode = runtime.WorldState.WorkspaceMode;
-        var isVisible = workspaceMode != CraftWorkspaceMode.Hidden;
+        var storageActive = runtime.WorldState.ActiveStorageEntityId is not null;
+        var isVisible = workspaceMode != CraftWorkspaceMode.Hidden || storageActive;
         _view.CraftWorkspacePanel.Visible = isVisible;
         if (!isVisible)
         {
             _recipeStructureKey = null;
             _recipeStateKey = null;
             _lastInventorySignature = null;
-            _cachedCraftingPanel = new CraftingPanelViewData(false, "Handcraft", CraftModeIconKind.Handcraft, [], []);
+            _lastStorageSignature = null;
+            _view.StorageRegion.Visible = false;
+            _cachedCraftingPanel = new CraftingPanelViewData(false, "Handcraft", CraftModeIconKind.Handcraft, [], [], string.Empty, []);
             return _cachedCraftingPanel;
         }
 
         var inventorySignature = ComputeSlotSignature(runtime, 16, includeSelection: true);
+        var storageSignature = ComputeStorageSignature(runtime);
         var recipeIds = _simulation!.GetRecipesForWorkspace(workspaceMode).Select(recipe => recipe.Id.Value).ToArray();
         var recipeStructureKey = $"{workspaceMode}:{string.Join(',', recipeIds)}";
-        var recipeStateKey = $"{workspaceMode}:{inventorySignature}:{runtime.WorldState.ActiveFurnaceTask?.RecipeId.Value ?? string.Empty}:{runtime.WorldState.ActiveFurnaceTask is not null}";
+        var recipeStateKey = $"{workspaceMode}:{inventorySignature}:{storageSignature}:{runtime.WorldState.ActiveFurnaceTask?.RecipeId.Value ?? string.Empty}:{runtime.WorldState.ActiveFurnaceTask is not null}";
         var requiresPanelRebuild = _cachedCraftingPanel is null
             || _recipeStructureKey != recipeStructureKey
             || _recipeStateKey != recipeStateKey
-            || _lastInventorySignature != inventorySignature;
+            || _lastInventorySignature != inventorySignature
+            || _lastStorageSignature != storageSignature;
         var panelViewData = requiresPanelRebuild
             ? _builder.BuildCraftingPanel(runtime, _simulation!)
             : _cachedCraftingPanel!;
         _cachedCraftingPanel = panelViewData;
+        storageSignature = ComputeStorageSignature(runtime);
 
         _view.CraftModeLabel.Text = panelViewData.CraftModeLabel;
         _view.CraftModeIcon.Texture = _view.CreateCraftModeIcon(panelViewData.CraftModeIcon);
+        _view.StorageRegion.Visible = panelViewData.StorageSlots.Count > 0;
+        _view.StorageTitleLabel.Text = string.IsNullOrWhiteSpace(panelViewData.StorageTitle)
+            ? "Storage"
+            : panelViewData.StorageTitle;
 
         if (_lastInventorySignature != inventorySignature)
         {
@@ -162,12 +179,30 @@ public sealed class HudController
             {
                 var slotView = panelViewData.InventorySlots[index];
                 _view.SetSlot(_view.InventorySlots[index], ResolveItemIcon(slotView.ItemId, runtime), slotView.Quantity, false);
-                _view.InventorySlots[index].SlotRoot.TooltipText = index == runtime.Player.SelectedHotbarIndex
-                    ? "Current hand slot"
-                    : $"Click to move into hotbar slot {runtime.Player.SelectedHotbarIndex + 1}";
+                _view.InventorySlots[index].SlotRoot.TooltipText = panelViewData.StorageSlots.Count > 0
+                    ? "Click to move into storage"
+                    : index == runtime.Player.SelectedHotbarIndex
+                        ? "Current hand slot"
+                        : $"Click to move into hotbar slot {runtime.Player.SelectedHotbarIndex + 1}";
             }
 
             _lastInventorySignature = inventorySignature;
+        }
+
+        if (_lastStorageSignature != storageSignature)
+        {
+            for (var index = 0; index < _view.StorageSlots.Count; index++)
+            {
+                var slotView = index < panelViewData.StorageSlots.Count
+                    ? panelViewData.StorageSlots[index]
+                    : new InventorySlotViewData(null, 0);
+                _view.SetSlot(_view.StorageSlots[index], ResolveItemIcon(slotView.ItemId, runtime), slotView.Quantity, false);
+                _view.StorageSlots[index].SlotRoot.TooltipText = panelViewData.StorageSlots.Count > 0
+                    ? "Click to move into inventory"
+                    : string.Empty;
+            }
+
+            _lastStorageSignature = storageSignature;
         }
 
         if (_recipeStructureKey != recipeStructureKey)
@@ -219,7 +254,7 @@ public sealed class HudController
     private void RefreshLayout(GameRuntime runtime)
     {
         var viewportSize = _host.GetViewport().GetVisibleRect().Size;
-        var layoutKey = $"{viewportSize.X}:{viewportSize.Y}:{_view.CraftWorkspacePanel.Visible}:{_view.StatusBanner.Visible}:{_view.ContextPromptPanel.Visible}";
+        var layoutKey = $"{viewportSize.X}:{viewportSize.Y}:{_view.CraftWorkspacePanel.Visible}:{_view.StorageRegion.Visible}:{_view.StatusBanner.Visible}:{_view.ContextPromptPanel.Visible}";
         if (_lastLayoutKey == layoutKey)
         {
             return;
@@ -411,6 +446,7 @@ public sealed class HudController
         }
 
         _recipeStateKey = null;
+        _host.GetViewport().GuiReleaseFocus();
     }
 
     private void OnInventorySlotInput(int inventoryIndex, InputEvent @event)
@@ -420,7 +456,57 @@ public sealed class HudController
             return;
         }
 
-        _simulation!.MoveInventorySlotToSelectedHotbar(inventoryIndex);
+        if (_simulation is null)
+        {
+            return;
+        }
+
+        if (_cachedCraftingPanel?.StorageSlots.Count > 0)
+        {
+            _simulation.MoveInventorySlotToStorage(inventoryIndex);
+        }
+        else
+        {
+            _simulation!.MoveInventorySlotToSelectedHotbar(inventoryIndex);
+        }
+
         _recipeStateKey = null;
+        _host.GetViewport().GuiReleaseFocus();
+    }
+
+    private void OnStorageSlotInput(int storageIndex, InputEvent @event)
+    {
+        if (@event is not InputEventMouseButton { Pressed: true, ButtonIndex: MouseButton.Left })
+        {
+            return;
+        }
+
+        if (_simulation is null)
+        {
+            return;
+        }
+
+        _simulation!.MoveStorageSlotToInventory(storageIndex);
+        _recipeStateKey = null;
+        _host.GetViewport().GuiReleaseFocus();
+    }
+
+    private static int ComputeStorageSignature(GameRuntime runtime)
+    {
+        if (runtime.WorldState.ActiveStorageEntityId is not { } storageId
+            || !runtime.WorldState.GetActiveWorld().TryGetEntity(storageId, out var storageEntity)
+            || storageEntity.StorageInventory is null)
+        {
+            return 0;
+        }
+
+        var storageHash = new HashCode();
+        foreach (var slot in storageEntity.StorageInventory.Slots)
+        {
+            storageHash.Add(slot.ItemId?.Value);
+            storageHash.Add(slot.Quantity);
+        }
+
+        return storageHash.ToHashCode();
     }
 }

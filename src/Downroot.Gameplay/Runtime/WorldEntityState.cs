@@ -45,6 +45,7 @@ public sealed class WorldEntityState
     public float DamageAccumulator { get; set; }
     public float AiAccumulator { get; set; }
     public float HitFlashSeconds { get; set; }
+    public InventoryState? StorageInventory { get; set; }
 
     public WorldEntityState Clone()
     {
@@ -64,7 +65,8 @@ public sealed class WorldEntityState
             OpenState = OpenState,
             DamageAccumulator = DamageAccumulator,
             AiAccumulator = AiAccumulator,
-            HitFlashSeconds = HitFlashSeconds
+            HitFlashSeconds = HitFlashSeconds,
+            StorageInventory = StorageInventory?.Clone()
         };
     }
 }

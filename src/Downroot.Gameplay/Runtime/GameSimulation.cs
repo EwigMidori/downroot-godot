@@ -220,6 +220,36 @@ public sealed class GameSimulation
         inventorySlot.Set(hotbarItemId.Value, hotbarQuantity);
     }
 
+    public void MoveInventorySlotToStorage(int inventoryIndex)
+    {
+        if (_runtime.WorldState.ActiveStorageEntityId is not { } storageId
+            || !_worldQuery.TryGetActiveEntity(storageId, out var storageEntity)
+            || storageEntity.StorageInventory is null)
+        {
+            return;
+        }
+
+        if (_runtime.Player.Inventory.TryMoveSlotTo(inventoryIndex, storageEntity.StorageInventory, _runtime.Content))
+        {
+            _worldFacade.NotifyEntityStateChanged(storageEntity);
+        }
+    }
+
+    public void MoveStorageSlotToInventory(int storageIndex)
+    {
+        if (_runtime.WorldState.ActiveStorageEntityId is not { } storageId
+            || !_worldQuery.TryGetActiveEntity(storageId, out var storageEntity)
+            || storageEntity.StorageInventory is null)
+        {
+            return;
+        }
+
+        if (storageEntity.StorageInventory.TryMoveSlotTo(storageIndex, _runtime.Player.Inventory, _runtime.Content))
+        {
+            _worldFacade.NotifyEntityStateChanged(storageEntity);
+        }
+    }
+
     private void UpdateHotbarSelection(InputFrame input)
     {
         if (input.DirectHotbarSlot is { } directIndex)

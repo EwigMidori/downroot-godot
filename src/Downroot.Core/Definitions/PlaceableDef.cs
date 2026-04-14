@@ -21,4 +21,6 @@ public sealed record PlaceableDef(
     int OpenAtlasRow = 0,
     bool BlocksMovementWhenOpen = false,
     bool IsGroundCover = false,
-    bool CanBeDestroyed = true) : ContentDef(Id, DisplayName, SourcePackId);
+    bool CanBeDestroyed = true,
+    int StorageSlotCount = 0,
+    bool ConnectsToSameNeighbors = false) : ContentDef(Id, DisplayName, SourcePackId);

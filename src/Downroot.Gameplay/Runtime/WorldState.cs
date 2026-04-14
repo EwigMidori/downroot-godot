@@ -35,6 +35,7 @@ public sealed class WorldState
     public CraftWorkspaceMode WorkspaceMode { get; set; }
     public CraftingStationKind? ActiveStationKind { get; set; }
     public EntityId? ActiveStationEntityId { get; set; }
+    public EntityId? ActiveStorageEntityId { get; set; }
     public InteractionContext? CurrentInteraction { get; set; }
     public StatusEventState? ActiveStatusEvent { get; private set; }
     public float ActiveStatusEventSeconds { get; private set; }

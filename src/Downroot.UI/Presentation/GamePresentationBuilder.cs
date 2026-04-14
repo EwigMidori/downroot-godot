@@ -21,10 +21,15 @@ public sealed class GamePresentationBuilder
 
     public HudStatusViewData BuildHudStatus(GameRuntime runtime)
     {
-        var isNight = runtime.WorldState.IsNight(runtime.BootstrapConfig.DayLengthSeconds);
+        var dayLength = runtime.BootstrapConfig.DayLengthSeconds;
+        var isNight = runtime.WorldState.IsNight(dayLength);
+        var timeProgress = dayLength <= 0f
+            ? 0f
+            : runtime.WorldState.TimeOfDaySeconds / dayLength;
         return new HudStatusViewData(
-            isNight ? "Night" : "Daytime",
+            FormatTimeOfDayLabel(timeProgress, runtime.WorldState.TotalElapsedSeconds, dayLength),
             isNight,
+            ResolveNightOverlayAlpha(timeProgress),
             ToPercent(runtime.Player.Survival.Health, runtime.Player.Survival.MaxHealth),
             ToPercent(runtime.Player.Survival.Hunger, runtime.Player.Survival.MaxHunger),
             Math.Clamp(runtime.WorldState.PlayerHitFlashSeconds / 0.18f, 0f, 1f) * 0.45f);
@@ -41,15 +46,21 @@ public sealed class GamePresentationBuilder
     public CraftingPanelViewData BuildCraftingPanel(GameRuntime runtime, GameSimulation simulation)
     {
         var mode = runtime.WorldState.WorkspaceMode;
+        var storageSlots = BuildStorageSlots(runtime);
+        var storageOnly = mode == CraftWorkspaceMode.Hidden && storageSlots.Count > 0;
         return new CraftingPanelViewData(
-            mode != CraftWorkspaceMode.Hidden,
-            mode switch
+            mode != CraftWorkspaceMode.Hidden || storageSlots.Count > 0,
+            storageOnly
+                ? "Storage"
+                : mode switch
             {
                 CraftWorkspaceMode.Furnace => "Furnace",
                 CraftWorkspaceMode.Workbench => "Workbench",
                 _ => "Handcraft"
             },
-            mode switch
+            storageOnly
+                ? CraftModeIconKind.Handcraft
+                : mode switch
             {
                 CraftWorkspaceMode.Furnace => CraftModeIconKind.Furnace,
                 CraftWorkspaceMode.Workbench => CraftModeIconKind.Workbench,
@@ -59,7 +70,9 @@ public sealed class GamePresentationBuilder
             runtime.Player.Inventory.Slots
                 .Take(16)
                 .Select(slot => new InventorySlotViewData(slot.ItemId, slot.Quantity))
-                .ToArray());
+                .ToArray(),
+            ResolveStorageTitle(runtime),
+            storageSlots);
     }
 
     public IReadOnlyList<CraftRecipeViewData> BuildRecipeRows(GameRuntime runtime, GameSimulation simulation, CraftWorkspaceMode mode)
@@ -189,4 +202,68 @@ public sealed class GamePresentationBuilder
     private static bool IsFurnaceRecipe(RecipeDef recipe) => recipe.RequiredStationKind == CraftingStationKind.Furnace;
 
     private static float ToPercent(int current, int max) => max <= 0 ? 0f : Math.Clamp((float)current / max, 0f, 1f);
+
+    private static string ResolveStorageTitle(GameRuntime runtime)
+    {
+        if (runtime.WorldState.ActiveStorageEntityId is not { } storageId
+            || !runtime.WorldState.GetActiveWorld().TryGetEntity(storageId, out var storageEntity))
+        {
+            return string.Empty;
+        }
+
+        return runtime.Content.Placeables.Get(storageEntity.DefinitionId).DisplayName;
+    }
+
+    private static IReadOnlyList<InventorySlotViewData> BuildStorageSlots(GameRuntime runtime)
+    {
+        if (runtime.WorldState.ActiveStorageEntityId is not { } storageId
+            || !runtime.WorldState.GetActiveWorld().TryGetEntity(storageId, out var storageEntity)
+            || storageEntity.StorageInventory is null)
+        {
+            return [];
+        }
+
+        return storageEntity.StorageInventory.Slots
+            .Select(slot => new InventorySlotViewData(slot.ItemId, slot.Quantity))
+            .ToArray();
+    }
+
+    private static string FormatTimeOfDayLabel(float timeProgress, float totalElapsedSeconds, float dayLengthSeconds)
+    {
+        var dayNumber = dayLengthSeconds <= 0f
+            ? 1
+            : (int)MathF.Floor(totalElapsedSeconds / dayLengthSeconds) + 1;
+        var clockHours = (timeProgress * 24f + 6f) % 24f;
+        var hour = (int)MathF.Floor(clockHours);
+        var minute = (int)MathF.Floor((clockHours - hour) * 60f);
+        var phase = ResolveTimePhase(clockHours);
+        return $"Day {dayNumber} {hour:00}:{minute:00} {phase}";
+    }
+
+    private static string ResolveTimePhase(float clockHours)
+    {
+        if (clockHours is >= 5f and < 7f)
+        {
+            return "Dawn";
+        }
+
+        if (clockHours is >= 7f and < 17f)
+        {
+            return "Day";
+        }
+
+        if (clockHours is >= 17f and < 19f)
+        {
+            return "Dusk";
+        }
+
+        return "Night";
+    }
+
+    private static float ResolveNightOverlayAlpha(float timeProgress)
+    {
+        var cycle = (timeProgress - 0.25f) * MathF.PI * 2f;
+        var nightAmount = 0.5f - (0.5f * MathF.Cos(cycle));
+        return Math.Clamp(nightAmount * 0.34f, 0f, 0.34f);
+    }
 }
