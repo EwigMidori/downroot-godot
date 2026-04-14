@@ -19,7 +19,6 @@ public partial class AppRoot : Control
     private LoadGameController? _loadGame;
     private SettingsController? _settingsPage;
     private Control? _pageHost;
-    private bool _previousReturnHeld;
     private bool _pauseMenuActive;
     private Control? _currentPage;
 
@@ -62,26 +61,37 @@ public partial class AppRoot : Control
         ShowMainMenu();
     }
 
-    public override void _Process(double delta)
+    public override void _UnhandledInput(InputEvent @event)
     {
-        var returnHeld = Input.IsKeyPressed(Key.Escape);
-        if (returnHeld && !_previousReturnHeld && _session?.GameRoot is not null)
+        if (@event is not InputEventKey { Pressed: true, Echo: false, Keycode: Key.Escape })
         {
-            if (!_pageHost!.Visible)
-            {
-                ShowPauseMenu();
-            }
-            else if (_pauseMenuActive && ReferenceEquals(_currentPage, _mainMenu?.View))
-            {
-                ResumeSession();
-            }
-            else if (_pauseMenuActive)
-            {
-                ShowPauseMenu();
-            }
+            return;
         }
 
-        _previousReturnHeld = returnHeld;
+        if (_session?.GameRoot is null)
+        {
+            return;
+        }
+
+        if (!_pageHost!.Visible)
+        {
+            ShowPauseMenu();
+            GetViewport().SetInputAsHandled();
+            return;
+        }
+
+        if (_pauseMenuActive && ReferenceEquals(_currentPage, _mainMenu?.View))
+        {
+            ResumeSession();
+            GetViewport().SetInputAsHandled();
+            return;
+        }
+
+        if (_pauseMenuActive)
+        {
+            ShowPauseMenu();
+            GetViewport().SetInputAsHandled();
+        }
     }
 
     private void ShowMainMenu()
@@ -94,8 +104,6 @@ public partial class AppRoot : Control
         {
             CanContinue = _saves!.LoadManifest().LastPlayedSlotId is not null,
             CanLoadGame = _saves.ListSlots().Count > 0,
-            Heading = "Venture Below The Roots",
-            Subheading = "A quiet underground frontier. Start fresh, return to your last run, or tune the game before heading down.",
             VersionLabel = $"v{ProjectSettings.GetSetting("application/config/version", "0.4")}"
         });
         ShowPage(_mainMenu.View);

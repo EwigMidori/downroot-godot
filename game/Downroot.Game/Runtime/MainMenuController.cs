@@ -15,9 +15,8 @@ public sealed class MainMenuController
     private readonly Control _root;
     private readonly TextureRect _background;
     private readonly ColorRect _backdrop;
-    private readonly PanelContainer _menuPanel;
-    private readonly Label _headingLabel;
-    private readonly Label _subheadingLabel;
+    private readonly VBoxContainer _menuColumn;
+    private readonly Label _pauseLabel;
     private readonly Button _continueButton;
     private readonly Button _newGameButton;
     private readonly Button _quickStartButton;
@@ -54,58 +53,29 @@ public sealed class MainMenuController
         };
         _root.AddChild(_backdrop);
 
-        _menuPanel = new PanelContainer
+        _menuColumn = new VBoxContainer
         {
-            AnchorLeft = 1,
-            AnchorTop = 0.5f,
-            AnchorRight = 1,
-            AnchorBottom = 0.5f,
-            OffsetLeft = -430,
-            OffsetTop = -215,
-            OffsetRight = -80,
-            OffsetBottom = 215
+            AnchorLeft = 0,
+            AnchorTop = 1,
+            AnchorRight = 0,
+            AnchorBottom = 1,
+            OffsetLeft = 54,
+            OffsetTop = -380,
+            OffsetRight = 394,
+            OffsetBottom = -54
         };
-        _menuPanel.AddThemeStyleboxOverride("panel", CreatePanelStyle(
-            new Color(0.05f, 0.08f, 0.09f, 0.44f),
-            new Color(0.79f, 0.88f, 0.80f, 0.16f)));
-        _root.AddChild(_menuPanel);
+        _menuColumn.AddThemeConstantOverride("separation", 8);
+        _root.AddChild(_menuColumn);
 
-        var content = new VBoxContainer
+        _pauseLabel = new Label
         {
-            SizeFlagsHorizontal = Control.SizeFlags.ExpandFill,
-            SizeFlagsVertical = Control.SizeFlags.ExpandFill
+            Text = "Paused",
+            Visible = false,
+            HorizontalAlignment = HorizontalAlignment.Left
         };
-        content.AddThemeConstantOverride("separation", 10);
-        _menuPanel.AddChild(content);
-
-        var header = new VBoxContainer();
-        header.AddThemeConstantOverride("separation", 6);
-        content.AddChild(header);
-
-        _headingLabel = new Label
-        {
-            HorizontalAlignment = HorizontalAlignment.Left,
-            AutowrapMode = TextServer.AutowrapMode.WordSmart
-        };
-        _headingLabel.AddThemeFontSizeOverride("font_size", 34);
-        _headingLabel.AddThemeColorOverride("font_color", new Color(0.95f, 0.95f, 0.9f));
-        header.AddChild(_headingLabel);
-
-        _subheadingLabel = new Label
-        {
-            HorizontalAlignment = HorizontalAlignment.Left,
-            AutowrapMode = TextServer.AutowrapMode.WordSmart
-        };
-        _subheadingLabel.AddThemeFontSizeOverride("font_size", 15);
-        _subheadingLabel.AddThemeColorOverride("font_color", new Color(0.82f, 0.88f, 0.84f, 0.82f));
-        header.AddChild(_subheadingLabel);
-
-        var spacer = new Control { CustomMinimumSize = new Vector2(0, 18) };
-        content.AddChild(spacer);
-
-        var buttons = new VBoxContainer();
-        buttons.AddThemeConstantOverride("separation", 10);
-        content.AddChild(buttons);
+        _pauseLabel.AddThemeFontSizeOverride("font_size", 18);
+        _pauseLabel.AddThemeColorOverride("font_color", new Color(0.98f, 0.85f, 0.48f, 0.95f));
+        _menuColumn.AddChild(_pauseLabel);
 
         _continueButton = CreateButton("Continue", () => ContinueRequested?.Invoke());
         _newGameButton = CreateButton("New Game", () => NewGameRequested?.Invoke());
@@ -114,24 +84,24 @@ public sealed class MainMenuController
         _settingsButton = CreateButton("Settings", () => SettingsRequested?.Invoke());
         _quitButton = CreateButton("Quit", () => QuitRequested?.Invoke());
 
-        buttons.AddChild(_continueButton);
-        buttons.AddChild(_newGameButton);
-        buttons.AddChild(_quickStartButton);
-        buttons.AddChild(_loadGameButton);
-        buttons.AddChild(_settingsButton);
-        buttons.AddChild(_quitButton);
+        _menuColumn.AddChild(_continueButton);
+        _menuColumn.AddChild(_newGameButton);
+        _menuColumn.AddChild(_quickStartButton);
+        _menuColumn.AddChild(_loadGameButton);
+        _menuColumn.AddChild(_settingsButton);
+        _menuColumn.AddChild(_quitButton);
 
         _versionLabel = new Label
         {
-            AnchorLeft = 1,
+            AnchorLeft = 0,
             AnchorTop = 1,
-            AnchorRight = 1,
+            AnchorRight = 0,
             AnchorBottom = 1,
-            OffsetLeft = -220,
+            OffsetLeft = 54,
             OffsetTop = -42,
-            OffsetRight = -20,
+            OffsetRight = 394,
             OffsetBottom = -18,
-            HorizontalAlignment = HorizontalAlignment.Right,
+            HorizontalAlignment = HorizontalAlignment.Left,
             VerticalAlignment = VerticalAlignment.Bottom
         };
         _versionLabel.AddThemeFontSizeOverride("font_size", 13);
@@ -144,12 +114,8 @@ public sealed class MainMenuController
     public void Bind(MainMenuViewData data)
     {
         _background.Visible = true;
-        _backdrop.Color = new Color(0.03f, 0.05f, 0.06f, 0.24f);
-        _menuPanel.AddThemeStyleboxOverride("panel", CreatePanelStyle(
-            new Color(0.05f, 0.08f, 0.09f, 0.44f),
-            new Color(0.79f, 0.88f, 0.80f, 0.16f)));
-        _headingLabel.Text = data.Heading;
-        _subheadingLabel.Text = data.Subheading;
+        _backdrop.Color = new Color(0.02f, 0.04f, 0.05f, 0.18f);
+        _pauseLabel.Visible = false;
         _continueButton.Disabled = !data.CanContinue;
         _loadGameButton.Disabled = !data.CanLoadGame;
         ConfigureButton(_continueButton, "Continue", true);
@@ -165,12 +131,8 @@ public sealed class MainMenuController
     public void BindPauseMenu(bool canSaveGame)
     {
         _background.Visible = false;
-        _backdrop.Color = new Color(0.01f, 0.03f, 0.04f, 0.68f);
-        _menuPanel.AddThemeStyleboxOverride("panel", CreatePanelStyle(
-            new Color(0.04f, 0.07f, 0.08f, 0.86f),
-            new Color(0.98f, 0.83f, 0.42f, 0.34f)));
-        _headingLabel.Text = "Paused";
-        _subheadingLabel.Text = "The session is paused. Resume, save, or return to the main menu.";
+        _backdrop.Color = new Color(0.01f, 0.03f, 0.04f, 0.72f);
+        _pauseLabel.Visible = true;
         ConfigureButton(_continueButton, "Resume", true);
         ConfigureButton(_newGameButton, "Save Game", true);
         ConfigureButton(_quickStartButton, string.Empty, false);
@@ -190,7 +152,7 @@ public sealed class MainMenuController
         var button = new Button
         {
             Text = text,
-            CustomMinimumSize = new Vector2(0, 54),
+            CustomMinimumSize = new Vector2(280, 42),
             Alignment = HorizontalAlignment.Left,
             FocusMode = Control.FocusModeEnum.None
         };
@@ -212,7 +174,7 @@ public sealed class MainMenuController
         button.AddThemeColorOverride("font_hover_color", new Color(1f, 0.95f, 0.78f));
         button.AddThemeColorOverride("font_pressed_color", new Color(1f, 0.96f, 0.86f));
         button.AddThemeColorOverride("font_disabled_color", new Color(0.73f, 0.78f, 0.77f, 0.42f));
-        button.AddThemeConstantOverride("h_separation", 14);
+        button.AddThemeConstantOverride("h_separation", 10);
 
         button.AddThemeStyleboxOverride("normal", CreateButtonStyle(
             new Color(0f, 0f, 0f, 0f),
@@ -238,36 +200,15 @@ public sealed class MainMenuController
             BgColor = background,
             DrawCenter = true,
             BorderColor = border,
-            BorderWidthLeft = 4,
-            ContentMarginLeft = 18,
-            ContentMarginRight = 12,
-            ContentMarginTop = 10,
-            ContentMarginBottom = 10,
+            BorderWidthLeft = 3,
+            ContentMarginLeft = 14,
+            ContentMarginRight = 10,
+            ContentMarginTop = 8,
+            ContentMarginBottom = 8,
             CornerRadiusTopLeft = 3,
             CornerRadiusTopRight = 3,
             CornerRadiusBottomLeft = 3,
             CornerRadiusBottomRight = 3
-        };
-    }
-
-    private static StyleBoxFlat CreatePanelStyle(Color background, Color border)
-    {
-        return new StyleBoxFlat
-        {
-            BgColor = background,
-            BorderColor = border,
-            BorderWidthLeft = 1,
-            BorderWidthTop = 1,
-            BorderWidthRight = 1,
-            BorderWidthBottom = 1,
-            ContentMarginLeft = 26,
-            ContentMarginRight = 26,
-            ContentMarginTop = 28,
-            ContentMarginBottom = 24,
-            CornerRadiusTopLeft = 8,
-            CornerRadiusTopRight = 8,
-            CornerRadiusBottomLeft = 8,
-            CornerRadiusBottomRight = 8
         };
     }
 }
