@@ -46,6 +46,7 @@ public sealed class WorldState
     public long EntityProjectionVersion { get; private set; }
     public bool IsEntityProjectionDirty { get; private set; } = true;
     public long EntityStateVersion { get; private set; }
+    public long LightStateVersion { get; private set; }
 
     public bool IsNight(float dayLengthSeconds) => TimeOfDaySeconds >= dayLengthSeconds * 0.5f;
 
@@ -77,6 +78,11 @@ public sealed class WorldState
     public void NotifyEntityStateChanged()
     {
         EntityStateVersion++;
+    }
+
+    public void NotifyLightStateChanged()
+    {
+        LightStateVersion++;
     }
 
     public bool EnsureEntityProjectionCurrent()

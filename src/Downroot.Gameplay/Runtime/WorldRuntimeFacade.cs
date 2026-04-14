@@ -103,6 +103,14 @@ public sealed class WorldRuntimeFacade(GameRuntime runtime)
         }
     }
 
+    public void NotifyLightStateChanged(WorldEntityState entity)
+    {
+        if (entity.WorldSpaceKind == runtime.ActiveWorldSpaceKind)
+        {
+            runtime.WorldState.NotifyLightStateChanged();
+        }
+    }
+
     public ContentId? GetPortalDefinitionId(WorldSpaceKind worldSpaceKind)
     {
         return runtime.Content.WorldGenPasses

@@ -93,7 +93,6 @@ public sealed class InteractionSystem(
             return;
         }
 
-        var def = runtime.Content.Placeables.Get(entity.DefinitionId);
         _placeableResolver.Interact(entity);
     }
 

@@ -15,7 +15,7 @@ public sealed partial class WorldLightController : Node2D
     private WorldRuntimeFacade? _worldFacade;
     private WorldSpaceKind? _lastWorldSpaceKind;
     private long _lastProjectionVersion = -1;
-    private long _lastEntityStateVersion = -1;
+    private long _lastLightStateVersion = -1;
 
     public WorldLightController()
     {
@@ -44,12 +44,12 @@ public sealed partial class WorldLightController : Node2D
         var activeWorld = _worldFacade!.GetActiveWorld();
         if (_lastWorldSpaceKind != activeWorld.WorldSpaceKind
             || _lastProjectionVersion != _runtime.WorldState.EntityProjectionVersion
-            || _lastEntityStateVersion != _runtime.WorldState.EntityStateVersion)
+            || _lastLightStateVersion != _runtime.WorldState.LightStateVersion)
         {
             SynchronizeLights();
             _lastWorldSpaceKind = activeWorld.WorldSpaceKind;
             _lastProjectionVersion = _runtime.WorldState.EntityProjectionVersion;
-            _lastEntityStateVersion = _runtime.WorldState.EntityStateVersion;
+            _lastLightStateVersion = _runtime.WorldState.LightStateVersion;
         }
 
         var overlayStrength = ResolveNightOverlayStrength();

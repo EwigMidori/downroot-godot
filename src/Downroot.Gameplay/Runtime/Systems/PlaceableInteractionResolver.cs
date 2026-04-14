@@ -11,6 +11,19 @@ public sealed class PlaceableInteractionResolver(
     WorldQueryService worldQuery)
 {
     private const float StationRange = 56f;
+    private enum InteractionActionKind
+    {
+        Bed,
+        Storage,
+        CraftingStation,
+        Door,
+        LightSource
+    }
+
+    private readonly record struct InteractionAction(
+        InteractionActionKind Kind,
+        InteractionVerb Verb,
+        Action Execute);
 
     public void ValidateActiveInteractions()
     {
@@ -26,42 +39,13 @@ public sealed class PlaceableInteractionResolver(
 
     public InteractionContext CreateInteractionContext(WorldEntityState entity)
     {
-        var verb = ResolveVerb(entity);
+        var verb = ResolveAction(entity).Verb;
         return new InteractionContext(entity.Id, entity.Kind, entity.DefinitionId, verb);
     }
 
     public void Interact(WorldEntityState entity)
     {
-        var placeableDef = runtime.Content.Placeables.Get(entity.DefinitionId);
-        if (placeableDef.HasBehavior(PlaceableBehaviorKind.Bed))
-        {
-            InteractBed(entity);
-            return;
-        }
-
-        if (placeableDef.HasBehavior(PlaceableBehaviorKind.LightSource))
-        {
-            InteractLightSource(entity);
-            return;
-        }
-
-        if (placeableDef.HasBehavior(PlaceableBehaviorKind.Storage))
-        {
-            ToggleStorage(entity, placeableDef);
-            return;
-        }
-
-        if (placeableDef.HasBehavior(PlaceableBehaviorKind.CraftingStation))
-        {
-            ActivateStation(entity, placeableDef);
-            return;
-        }
-
-        if (placeableDef.HasBehavior(PlaceableBehaviorKind.Door))
-        {
-            ToggleDoor(entity);
-            return;
-        }
+        ResolveAction(entity).Execute();
     }
 
     public void ClearTransientUiState()
@@ -74,39 +58,79 @@ public sealed class PlaceableInteractionResolver(
         runtime.WorldState.ActiveDestroyProgress = null;
     }
 
-    private InteractionVerb ResolveVerb(WorldEntityState entity)
+    private InteractionAction ResolveAction(WorldEntityState entity)
     {
         var placeableDef = runtime.Content.Placeables.Get(entity.DefinitionId);
+        var actions = new List<InteractionAction>(5);
         if (placeableDef.HasBehavior(PlaceableBehaviorKind.Bed))
         {
-            return runtime.WorldState.IsNight(runtime.BootstrapConfig.DayLengthSeconds)
-                ? InteractionVerb.Sleep
-                : InteractionVerb.SetHome;
+            actions.Add(new InteractionAction(
+                InteractionActionKind.Bed,
+                runtime.WorldState.IsNight(runtime.BootstrapConfig.DayLengthSeconds)
+                    ? InteractionVerb.Sleep
+                    : InteractionVerb.SetHome,
+                () => InteractBed(entity)));
         }
 
         if (placeableDef.HasBehavior(PlaceableBehaviorKind.LightSource))
         {
-            if (entity.PlaceableState?.FuelSecondsRemaining <= 0f)
-            {
-                return InteractionVerb.Use;
-            }
-
-            return entity.PlaceableState?.IsLit == true
-                ? InteractionVerb.Extinguish
-                : InteractionVerb.Light;
+            var lightVerb = entity.PlaceableState?.FuelSecondsRemaining <= 0f
+                ? InteractionVerb.Use
+                : entity.PlaceableState?.IsLit == true
+                    ? InteractionVerb.Extinguish
+                    : InteractionVerb.Light;
+            actions.Add(new InteractionAction(
+                InteractionActionKind.LightSource,
+                lightVerb,
+                () => InteractLightSource(entity)));
         }
 
         if (placeableDef.HasBehavior(PlaceableBehaviorKind.Storage))
         {
-            return entity.OpenState ? InteractionVerb.Close : InteractionVerb.Open;
+            actions.Add(new InteractionAction(
+                InteractionActionKind.Storage,
+                entity.OpenState ? InteractionVerb.Close : InteractionVerb.Open,
+                () => ToggleStorage(entity, placeableDef)));
+        }
+
+        if (placeableDef.HasBehavior(PlaceableBehaviorKind.CraftingStation))
+        {
+            actions.Add(new InteractionAction(
+                InteractionActionKind.CraftingStation,
+                InteractionVerb.Use,
+                () => ActivateStation(entity, placeableDef)));
         }
 
         if (placeableDef.HasBehavior(PlaceableBehaviorKind.Door))
         {
-            return entity.OpenState ? InteractionVerb.Close : InteractionVerb.Open;
+            actions.Add(new InteractionAction(
+                InteractionActionKind.Door,
+                entity.OpenState ? InteractionVerb.Close : InteractionVerb.Open,
+                () => ToggleDoor(entity)));
         }
 
-        return InteractionVerb.Use;
+        if (actions.Count == 0)
+        {
+            return new InteractionAction(InteractionActionKind.CraftingStation, InteractionVerb.Use, () => { });
+        }
+
+        return actions
+            .OrderByDescending(action => ResolvePriority(entity, action.Kind))
+            .First();
+    }
+
+    private int ResolvePriority(WorldEntityState entity, InteractionActionKind kind)
+    {
+        return kind switch
+        {
+            InteractionActionKind.Bed => 500,
+            InteractionActionKind.Storage when runtime.WorldState.ActiveStorageEntityId == entity.Id => 450,
+            InteractionActionKind.Storage => 400,
+            InteractionActionKind.CraftingStation => 300,
+            InteractionActionKind.Door => 200,
+            InteractionActionKind.LightSource => 100,
+            _ => 0
+        };
     }
 
     private void InteractBed(WorldEntityState entity)
@@ -131,6 +155,7 @@ public sealed class PlaceableInteractionResolver(
         {
             state.IsLit = false;
             worldFacade.NotifyEntityStateChanged(entity);
+            worldFacade.NotifyLightStateChanged(entity);
             runtime.WorldState.SetStatusEvent(new StatusEventState(StatusEventKind.LightBurnedOut, entity.DefinitionId), 1.5f);
             return;
         }
@@ -138,6 +163,7 @@ public sealed class PlaceableInteractionResolver(
         state.IsLit = !state.IsLit;
         state.FuelLastUpdatedTotalSeconds = runtime.WorldState.TotalElapsedSeconds;
         worldFacade.NotifyEntityStateChanged(entity);
+        worldFacade.NotifyLightStateChanged(entity);
         runtime.WorldState.SetStatusEvent(
             new StatusEventState(state.IsLit ? StatusEventKind.LightLit : StatusEventKind.LightExtinguished, entity.DefinitionId),
             1.2f);

@@ -44,13 +44,8 @@ public sealed class PlaceableStateSystem(GameRuntime runtime, WorldRuntimeFacade
             {
                 state.IsLit = false;
                 worldFacade.NotifyEntityStateChanged(entity);
+                worldFacade.NotifyLightStateChanged(entity);
                 runtime.WorldState.SetStatusEvent(new StatusEventState(StatusEventKind.LightBurnedOut, entity.DefinitionId), 1.5f);
-                continue;
-            }
-
-            if (entity.WorldSpaceKind == runtime.ActiveWorldSpaceKind)
-            {
-                runtime.WorldState.NotifyEntityStateChanged();
             }
         }
     }
