@@ -38,7 +38,10 @@ public sealed class SessionController
         _saveRepository.SetLastPlayedSlot(request.StartOptions.SaveSlotId);
         _debugState = new DebugRuntimeState();
         _debugState.Bind(runtime, request.StartOptions.DisplayName);
-        _gameRoot = new GameRoot();
+        _gameRoot = new GameRoot
+        {
+            ProcessMode = Node.ProcessModeEnum.Pausable
+        };
         _gameRoot.Configure(runtime, _debugState, SaveCurrent, ReloadCurrent);
         _host.AddChild(_gameRoot);
 

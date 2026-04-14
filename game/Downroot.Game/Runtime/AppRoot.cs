@@ -19,6 +19,7 @@ public partial class AppRoot : Control
     private NewGameController? _newGame;
     private LoadGameController? _loadGame;
     private SettingsController? _settingsPage;
+    private CanvasLayer? _pageLayer;
     private Control? _pageHost;
     private bool _pauseMenuActive;
     private Control? _currentPage;
@@ -34,8 +35,22 @@ public partial class AppRoot : Control
         _settingsApplier.Apply(_settings.Load());
         GameInputMapInstaller.Install();
 
-        _pageHost = new Control { AnchorRight = 1, AnchorBottom = 1, Name = "AppPageHost", ProcessMode = Node.ProcessModeEnum.Always };
-        AddChild(_pageHost);
+        _pageLayer = new CanvasLayer
+        {
+            Name = "AppPageLayer",
+            ProcessMode = Node.ProcessModeEnum.Always,
+            Layer = 100
+        };
+        AddChild(_pageLayer);
+        _pageHost = new Control
+        {
+            AnchorRight = 1,
+            AnchorBottom = 1,
+            Name = "AppPageHost",
+            ProcessMode = Node.ProcessModeEnum.Always,
+            MouseFilter = Control.MouseFilterEnum.Stop
+        };
+        _pageLayer.AddChild(_pageHost);
         _session = new SessionController(this, _saves);
 
         _mainMenu = new MainMenuController();
@@ -266,7 +281,6 @@ public partial class AppRoot : Control
         }
 
         _pageHost.AddChild(page);
-        MoveChild(_pageHost, GetChildCount() - 1);
         _currentPage = page;
     }
 
