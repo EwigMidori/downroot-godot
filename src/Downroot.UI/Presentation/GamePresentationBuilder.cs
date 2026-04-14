@@ -1,5 +1,6 @@
 using Downroot.Content.Registries;
 using Downroot.Core.Definitions;
+using Downroot.Core.Gameplay;
 using Downroot.Core.Ids;
 using Downroot.Gameplay.Runtime;
 
@@ -18,18 +19,23 @@ public sealed class GamePresentationBuilder
             BuildDestroyProgress(runtime));
     }
 
-    private static HudStatusViewData BuildHudStatus(GameRuntime runtime)
+    public HudStatusViewData BuildHudStatus(GameRuntime runtime)
     {
-        var isNight = runtime.WorldState.IsNight(runtime.BootstrapConfig.DayLengthSeconds);
+        var dayLength = runtime.BootstrapConfig.DayLengthSeconds;
+        var isNight = runtime.WorldState.IsNight(dayLength);
+        var timeProgress = dayLength <= 0f
+            ? 0f
+            : runtime.WorldState.TimeOfDaySeconds / dayLength;
         return new HudStatusViewData(
-            isNight ? "Night" : "Daytime",
+            FormatTimeOfDayLabel(timeProgress, runtime.WorldState.TotalElapsedSeconds, dayLength),
             isNight,
+            ResolveNightOverlayAlpha(timeProgress),
             ToPercent(runtime.Player.Survival.Health, runtime.Player.Survival.MaxHealth),
             ToPercent(runtime.Player.Survival.Hunger, runtime.Player.Survival.MaxHunger),
-            Math.Clamp(runtime.WorldState.PlayerHitFlashSeconds / 0.18f, 0f, 1f) * 0.45f);
+            Math.Clamp(runtime.WorldState.PlayerHitFlashSeconds / 0.18f, 0f, 1f) * 0.62f);
     }
 
-    private static IReadOnlyList<HotbarSlotViewData> BuildHotbar(GameRuntime runtime)
+    public IReadOnlyList<HotbarSlotViewData> BuildHotbar(GameRuntime runtime)
     {
         return runtime.Player.Inventory.Slots
             .Take(runtime.Player.HotbarSize)
@@ -37,18 +43,24 @@ public sealed class GamePresentationBuilder
             .ToArray();
     }
 
-    private static CraftingPanelViewData BuildCraftingPanel(GameRuntime runtime, GameSimulation simulation)
+    public CraftingPanelViewData BuildCraftingPanel(GameRuntime runtime, GameSimulation simulation)
     {
         var mode = runtime.WorldState.WorkspaceMode;
+        var storageSlots = BuildStorageSlots(runtime);
+        var storageOnly = mode == CraftWorkspaceMode.Hidden && storageSlots.Count > 0;
         return new CraftingPanelViewData(
-            mode != CraftWorkspaceMode.Hidden,
-            mode switch
+            mode != CraftWorkspaceMode.Hidden || storageSlots.Count > 0,
+            storageOnly
+                ? "Storage"
+                : mode switch
             {
                 CraftWorkspaceMode.Furnace => "Furnace",
                 CraftWorkspaceMode.Workbench => "Workbench",
                 _ => "Handcraft"
             },
-            mode switch
+            storageOnly
+                ? CraftModeIconKind.Handcraft
+                : mode switch
             {
                 CraftWorkspaceMode.Furnace => CraftModeIconKind.Furnace,
                 CraftWorkspaceMode.Workbench => CraftModeIconKind.Workbench,
@@ -58,10 +70,12 @@ public sealed class GamePresentationBuilder
             runtime.Player.Inventory.Slots
                 .Take(16)
                 .Select(slot => new InventorySlotViewData(slot.ItemId, slot.Quantity))
-                .ToArray());
+                .ToArray(),
+            ResolveStorageTitle(runtime),
+            storageSlots);
     }
 
-    private static IReadOnlyList<CraftRecipeViewData> BuildRecipeRows(GameRuntime runtime, GameSimulation simulation, CraftWorkspaceMode mode)
+    public IReadOnlyList<CraftRecipeViewData> BuildRecipeRows(GameRuntime runtime, GameSimulation simulation, CraftWorkspaceMode mode)
     {
         var activeTask = runtime.WorldState.ActiveFurnaceTask;
         return simulation.GetRecipesForWorkspace(mode)
@@ -102,7 +116,7 @@ public sealed class GamePresentationBuilder
             .ToArray();
     }
 
-    private static InteractionPromptViewData BuildInteractionPrompt(GameRuntime runtime)
+    public InteractionPromptViewData BuildInteractionPrompt(GameRuntime runtime)
     {
         var context = runtime.WorldState.CurrentInteraction;
         if (context is null)
@@ -134,7 +148,7 @@ public sealed class GamePresentationBuilder
             ResolveTargetName(runtime.Content, context.EntityKind, context.ContentId));
     }
 
-    private static StatusBannerViewData BuildStatusBanner(GameRuntime runtime)
+    public StatusBannerViewData BuildStatusBanner(GameRuntime runtime)
     {
         if (runtime.WorldState.ActiveStatusEvent is null)
         {
@@ -150,18 +164,22 @@ public sealed class GamePresentationBuilder
             { Kind: StatusEventKind.MissingIngredient } => new StatusBannerViewData(true, $"Need {ResolveItemName(runtime.Content, statusEvent.PrimaryContentId!.Value)} x{statusEvent.Amount}"),
             { Kind: StatusEventKind.StationRequired } => new StatusBannerViewData(true, "Need a nearby station"),
             { Kind: StatusEventKind.InventoryFull } => new StatusBannerViewData(true, "Inventory full"),
+            { Kind: StatusEventKind.EnteredPortal } => new StatusBannerViewData(true, "Entering Portal"),
+            { Kind: StatusEventKind.ReturnedThroughPortal } => new StatusBannerViewData(true, "Returned to Overworld"),
             _ => new StatusBannerViewData(true, "Craft failed")
         };
     }
 
-    private static DestroyProgressViewData BuildDestroyProgress(GameRuntime runtime)
+    public DestroyProgressViewData BuildDestroyProgress(GameRuntime runtime)
     {
         return runtime.WorldState.ActiveDestroyProgress switch
         {
             null => new DestroyProgressViewData(false, string.Empty, 0f, default),
             var progress => new DestroyProgressViewData(
                 true,
-                ResolveTargetName(runtime.Content, progress.EntityKind, progress.ContentId),
+                progress.IsRaisedFeature
+                    ? runtime.Content.RaisedFeatures.Get(progress.ContentId).DisplayName
+                    : ResolveTargetName(runtime.Content, progress.EntityKind!.Value, progress.ContentId),
                 progress.Progress01,
                 progress.WorldPosition)
         };
@@ -181,7 +199,71 @@ public sealed class GamePresentationBuilder
 
     private static string ResolveItemName(ContentRegistrySet content, ContentId contentId) => content.Items.Get(contentId).DisplayName;
 
-    private static bool IsFurnaceRecipe(RecipeDef recipe) => recipe.RequiredStationKey == "furnace";
+    private static bool IsFurnaceRecipe(RecipeDef recipe) => recipe.RequiredStationKind == CraftingStationKind.Furnace;
 
     private static float ToPercent(int current, int max) => max <= 0 ? 0f : Math.Clamp((float)current / max, 0f, 1f);
+
+    private static string ResolveStorageTitle(GameRuntime runtime)
+    {
+        if (runtime.WorldState.ActiveStorageEntityId is not { } storageId
+            || !runtime.WorldState.GetActiveWorld().TryGetEntity(storageId, out var storageEntity))
+        {
+            return string.Empty;
+        }
+
+        return runtime.Content.Placeables.Get(storageEntity.DefinitionId).DisplayName;
+    }
+
+    private static IReadOnlyList<InventorySlotViewData> BuildStorageSlots(GameRuntime runtime)
+    {
+        if (runtime.WorldState.ActiveStorageEntityId is not { } storageId
+            || !runtime.WorldState.GetActiveWorld().TryGetEntity(storageId, out var storageEntity)
+            || storageEntity.StorageInventory is null)
+        {
+            return [];
+        }
+
+        return storageEntity.StorageInventory.Slots
+            .Select(slot => new InventorySlotViewData(slot.ItemId, slot.Quantity))
+            .ToArray();
+    }
+
+    private static string FormatTimeOfDayLabel(float timeProgress, float totalElapsedSeconds, float dayLengthSeconds)
+    {
+        var dayNumber = dayLengthSeconds <= 0f
+            ? 1
+            : (int)MathF.Floor(totalElapsedSeconds / dayLengthSeconds) + 1;
+        var clockHours = (timeProgress * 24f + 6f) % 24f;
+        var hour = (int)MathF.Floor(clockHours);
+        var minute = (int)MathF.Floor((clockHours - hour) * 60f);
+        var phase = ResolveTimePhase(clockHours);
+        return $"Day {dayNumber} {hour:00}:{minute:00} {phase}";
+    }
+
+    private static string ResolveTimePhase(float clockHours)
+    {
+        if (clockHours is >= 5f and < 7f)
+        {
+            return "Dawn";
+        }
+
+        if (clockHours is >= 7f and < 17f)
+        {
+            return "Day";
+        }
+
+        if (clockHours is >= 17f and < 19f)
+        {
+            return "Dusk";
+        }
+
+        return "Night";
+    }
+
+    private static float ResolveNightOverlayAlpha(float timeProgress)
+    {
+        var cycle = (timeProgress - 0.25f) * MathF.PI * 2f;
+        var nightAmount = 0.5f - (0.5f * MathF.Cos(cycle));
+        return Math.Clamp(nightAmount * 0.34f, 0f, 0.34f);
+    }
 }

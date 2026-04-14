@@ -20,7 +20,13 @@ public sealed class ContentRegistrar(ContentRegistrySet registries) : IContentRe
 
     public void RegisterResourceNode(ResourceNodeDef resourceNodeDef) => registries.ResourceNodes.Register(resourceNodeDef);
 
-    public void RegisterWorldGenPass(WorldGenPassDef passDef) => registries.WorldGenPasses.Add(passDef);
+    public void RegisterRaisedFeature(RaisedFeatureDef raisedFeatureDef) => registries.RaisedFeatures.Register(raisedFeatureDef);
+
+    public void RegisterWorldGenPass(WorldGenPassDef passDef) => registries.AddWorldGenPass(passDef);
+
+    public void RegisterPortalWorldLink(PortalWorldLinkDef def) => registries.AddPortalWorldLink(def);
+
+    public void RegisterRaisedOreFieldRule(RaisedOreFieldRuleDef def) => registries.AddRaisedOreFieldRule(def);
 
     public void SetBootstrapConfig(GameBootstrapConfig config) => registries.BootstrapConfig = config;
 }

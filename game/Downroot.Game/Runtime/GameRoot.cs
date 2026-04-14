@@ -1,7 +1,7 @@
 using Downroot.Core.Ids;
 using Downroot.Core.Input;
+using Downroot.Core.Diagnostics;
 using Downroot.Game.Infrastructure;
-using Downroot.Gameplay.Bootstrap;
 using Downroot.Gameplay.Runtime;
 using Godot;
 using NumericsVector2 = System.Numerics.Vector2;
@@ -18,6 +18,31 @@ public partial class GameRoot : Node2D
     private StartupOverlayController? _startupOverlay;
     private WorldRenderer? _worldRenderer;
     private HudController? _hudController;
+    private CanvasLayer? _travelOverlayLayer;
+    private ColorRect? _travelOverlay;
+    private DebugRuntimeState? _debugState;
+    private DebugPanelController? _debugPanel;
+    private Action? _saveAction;
+    private Action? _reloadAction;
+    private bool _initialized;
+    private bool _previousDebugToggleHeld;
+    private bool _previousManualSaveHeld;
+
+    public GameRuntime Runtime => _runtime ?? throw new InvalidOperationException("GameRoot has not been configured.");
+    public GameSimulation Simulation => _simulation ?? throw new InvalidOperationException("GameRoot has not been configured.");
+
+    public void Configure(GameRuntime runtime, DebugRuntimeState debugState, Action saveAction, Action reloadAction)
+    {
+        if (_initialized || _runtime is not null)
+        {
+            throw new InvalidOperationException("GameRoot has already been configured.");
+        }
+
+        _runtime = runtime;
+        _debugState = debugState;
+        _saveAction = saveAction;
+        _reloadAction = reloadAction;
+    }
 
     public override void _Ready()
     {
@@ -28,14 +53,19 @@ public partial class GameRoot : Node2D
             GameInputMapInstaller.Install();
 
             _startupOverlay.UpdateStatus("Bootstrapping runtime");
-            _runtime = new GameBootstrapper().Bootstrap();
-            _simulation = new GameSimulation(_runtime);
+            RuntimeProfiler.Configure(message => GD.Print(message), frameWindow: 60);
+            if (_runtime is null)
+            {
+                throw new InvalidOperationException("GameRoot requires a preconfigured runtime.");
+            }
+
+            _simulation = new GameSimulation(_runtime, _debugState);
 
             _startupOverlay.UpdateStatus("Resolving content root");
             var packPathResolver = new PackPathResolver();
             _textureLoader = new TextureContentLoader(packPathResolver);
             _animationFactory = new PlayerAnimationFactory(packPathResolver);
-            GD.Print($"Content root resolved. Example grass path: {packPathResolver.ResolveAbsolutePath("packs/basegame/assets/world/terrain/ground/grass.png")}");
+            GD.Print("Content root resolved.");
 
             _startupOverlay.UpdateStatus("Creating HUD");
             _hudController = new HudController(this, _textureLoader);
@@ -51,6 +81,8 @@ public partial class GameRoot : Node2D
             _worldRenderer = new WorldRenderer(_textureLoader, _animationFactory);
             AddChild(_worldRenderer);
             _worldRenderer.Initialize(_runtime);
+            InitializeTravelOverlay();
+            _debugPanel = new DebugPanelController(this, _debugState!, new DebugCommandExecutor(_runtime, _debugState!, () => _saveAction?.Invoke(), () => _reloadAction?.Invoke()));
 
             _startupOverlay.UpdateStatus("Validating content");
             _worldRenderer.ValidateContentLoads(_runtime);
@@ -58,6 +90,7 @@ public partial class GameRoot : Node2D
             _worldRenderer.Update(new InputFrame(default, default, false, false, false, false, false, false, 0, null));
             _hudController.Refresh(_runtime, _worldRenderer.WorldToScreen);
             _startupOverlay.Hide();
+            _initialized = true;
         }
         catch (Exception exception)
         {
@@ -74,9 +107,73 @@ public partial class GameRoot : Node2D
             return;
         }
 
+        RuntimeProfiler.BeginFrame();
+        using var frameScope = RuntimeProfiler.Measure("GameRoot.PhysicsProcess");
+        var debugToggleHeld = Input.IsKeyPressed(Key.F9);
+        if (debugToggleHeld && !_previousDebugToggleHeld)
+        {
+            _debugPanel?.ToggleVisibility();
+        }
+        _previousDebugToggleHeld = debugToggleHeld;
+
+        var manualSaveHeld = Input.IsKeyPressed(Key.F5);
+        if (manualSaveHeld && !_previousManualSaveHeld)
+        {
+            _saveAction?.Invoke();
+            GD.Print("[Save] Manual save completed.");
+        }
+        _previousManualSaveHeld = manualSaveHeld;
+
         var frame = _inputService.CaptureFrame();
-        _simulation.Tick((float)delta, frame);
-        _worldRenderer.Update(frame);
-        _hudController.Refresh(_runtime, _worldRenderer.WorldToScreen);
+        using (RuntimeProfiler.Measure("GameRoot.Simulation"))
+        {
+            _simulation.Tick((float)delta, frame);
+        }
+
+        using (RuntimeProfiler.Measure("GameRoot.Renderer"))
+        {
+            _worldRenderer.Update(frame);
+        }
+
+        using (RuntimeProfiler.Measure("GameRoot.Hud"))
+        {
+            _hudController.Refresh(_runtime, _worldRenderer.WorldToScreen);
+        }
+
+        using (RuntimeProfiler.Measure("GameRoot.Overlay"))
+        {
+            UpdateTravelOverlay();
+        }
+
+        _worldRenderer.SetShowChunkBounds(_debugState?.ShowChunkBounds ?? false);
+        _debugPanel?.Refresh();
+
+        RuntimeProfiler.EndFrame();
+    }
+
+    private void InitializeTravelOverlay()
+    {
+        _travelOverlayLayer = new CanvasLayer();
+        _travelOverlay = new ColorRect
+        {
+            Color = new Color(0f, 0f, 0f, 0f),
+            MouseFilter = Control.MouseFilterEnum.Ignore
+        };
+        _travelOverlay.SetAnchorsPreset(Control.LayoutPreset.FullRect);
+        _travelOverlay.SetOffsetsPreset(Control.LayoutPreset.FullRect);
+        _travelOverlayLayer.AddChild(_travelOverlay);
+        AddChild(_travelOverlayLayer);
+    }
+
+    private void UpdateTravelOverlay()
+    {
+        if (_runtime is null || _travelOverlay is null)
+        {
+            return;
+        }
+
+        var alpha = _runtime.WorldState.Travel.OverlayAlpha01;
+        _travelOverlay.Color = new Color(0f, 0f, 0f, alpha);
+        _travelOverlay.Visible = alpha > 0f;
     }
 }

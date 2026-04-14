@@ -6,6 +6,7 @@ public sealed record WorldGenPassDef(
     ContentId Id,
     string PassType,
     ContentId TargetId,
+    WorldSpaceKind? WorldSpaceKind = null,
     int Count = 0,
     int StartColumn = 0,
     int StartRow = 0,

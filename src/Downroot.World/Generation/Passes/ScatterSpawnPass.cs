@@ -13,7 +13,7 @@ public sealed class ScatterSpawnPass(
     string? requiredSurfaceRegion,
     int minSpacing) : IWorldGenPass
 {
-    public string Name => "scatter-spawn";
+    public string Name => WorldGenPassTypes.ScatterSpawn;
 
     public void Execute(IWorldGenContext context)
     {
@@ -27,13 +27,18 @@ public sealed class ScatterSpawnPass(
         var originX = Math.Clamp(startColumn, 0, Math.Max(0, context.Width - 1));
         var originY = Math.Clamp(startRow, 0, Math.Max(0, context.Height - 1));
 
-        var candidates = new List<TileCoord>();
+        var candidates = new List<LocalTileCoord>();
         for (var y = originY; y < originY + usableHeight; y++)
         {
             for (var x = originX; x < originX + usableWidth; x++)
             {
-                var coord = new TileCoord(x, y);
+                var coord = new LocalTileCoord(x, y);
                 if (requiredSurfaceRegion is not null && !context.HasSurfaceRegion(coord, requiredSurfaceRegion))
+                {
+                    continue;
+                }
+
+                if (context.HasRaisedFeature(coord))
                 {
                     continue;
                 }
@@ -43,9 +48,9 @@ public sealed class ScatterSpawnPass(
         }
 
         var ordered = candidates
-            .OrderBy(coord => StableHash(coord.X, coord.Y, targetId.Value.GetHashCode()))
+            .OrderBy(coord => context.GetStableHash(context.GetWorldTileCoord(coord), targetId.Value.GetHashCode()))
             .ToArray();
-        var chosen = new List<TileCoord>();
+        var chosen = new List<LocalTileCoord>();
         foreach (var coord in ordered)
         {
             if (chosen.Count >= count)
@@ -68,13 +73,7 @@ public sealed class ScatterSpawnPass(
         }
     }
 
-    private static int StableHash(int x, int y, int seed)
-    {
-        var hash = x * 73856093 ^ y * 19349663 ^ seed * 83492791;
-        return hash & int.MaxValue;
-    }
-
-    private static int DistanceSquared(TileCoord a, TileCoord b)
+    private static int DistanceSquared(LocalTileCoord a, LocalTileCoord b)
     {
         var dx = a.X - b.X;
         var dy = a.Y - b.Y;

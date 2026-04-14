@@ -12,4 +12,6 @@ public sealed record CraftingPanelViewData(
     string CraftModeLabel,
     CraftModeIconKind CraftModeIcon,
     IReadOnlyList<CraftRecipeViewData> Recipes,
-    IReadOnlyList<InventorySlotViewData> InventorySlots);
+    IReadOnlyList<InventorySlotViewData> InventorySlots,
+    string StorageTitle,
+    IReadOnlyList<InventorySlotViewData> StorageSlots);

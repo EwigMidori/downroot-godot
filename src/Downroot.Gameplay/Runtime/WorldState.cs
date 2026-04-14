@@ -1,27 +1,87 @@
 using Downroot.Core.Ids;
+using Downroot.Core.Gameplay;
+using Downroot.Core.World;
 
 namespace Downroot.Gameplay.Runtime;
 
 public sealed class WorldState
 {
     private readonly List<WorldEntityState> _entities = [];
+    private readonly EntityProjectionBuilder _projectionBuilder = new();
+    private WorldSpaceKind _activeWorldSpaceKind = WorldSpaceKind.Overworld;
 
+    // Active-world convenience projection for renderer, UI, and query services.
     public IReadOnlyList<WorldEntityState> Entities => _entities;
+    public WorldSpaceKind ActiveWorldSpaceKind
+    {
+        get => _activeWorldSpaceKind;
+        set
+        {
+            if (_activeWorldSpaceKind == value)
+            {
+                return;
+            }
+
+            _activeWorldSpaceKind = value;
+            MarkEntityProjectionDirty();
+        }
+    }
+
+    public required LoadedWorldState Overworld { get; init; }
+    public required LoadedWorldState DimShardPocket { get; init; }
+    public WorldTravelState Travel { get; } = new();
     public float TimeOfDaySeconds { get; set; }
     public float TotalElapsedSeconds { get; set; }
     public CraftWorkspaceMode WorkspaceMode { get; set; }
-    public string? ActiveStationKey { get; set; }
+    public CraftingStationKind? ActiveStationKind { get; set; }
     public EntityId? ActiveStationEntityId { get; set; }
+    public EntityId? ActiveStorageEntityId { get; set; }
     public InteractionContext? CurrentInteraction { get; set; }
     public StatusEventState? ActiveStatusEvent { get; private set; }
     public float ActiveStatusEventSeconds { get; private set; }
     public DestroyProgressState? ActiveDestroyProgress { get; set; }
     public FurnaceTaskState? ActiveFurnaceTask { get; set; }
     public float PlayerHitFlashSeconds { get; set; }
+    public long EntityProjectionVersion { get; private set; }
+    public bool IsEntityProjectionDirty { get; private set; } = true;
 
     public bool IsNight(float dayLengthSeconds) => TimeOfDaySeconds >= dayLengthSeconds * 0.5f;
 
-    public void AddEntity(WorldEntityState entity) => _entities.Add(entity);
+    public LoadedWorldState GetActiveWorld()
+    {
+        return ActiveWorldSpaceKind == WorldSpaceKind.Overworld
+            ? Overworld
+            : DimShardPocket;
+    }
+
+    public void RefreshEntityProjection()
+    {
+        EnsureEntityProjectionCurrent();
+    }
+
+    public void RebuildEntityProjection(EntityProjectionBuilder builder)
+    {
+        _entities.Clear();
+        _entities.AddRange(builder.Build(GetActiveWorld()));
+        IsEntityProjectionDirty = false;
+        EntityProjectionVersion++;
+    }
+
+    public void MarkEntityProjectionDirty()
+    {
+        IsEntityProjectionDirty = true;
+    }
+
+    public bool EnsureEntityProjectionCurrent()
+    {
+        if (!IsEntityProjectionDirty)
+        {
+            return false;
+        }
+
+        RebuildEntityProjection(_projectionBuilder);
+        return true;
+    }
 
     public void SetStatusEvent(StatusEventState statusEvent, float seconds = 2f)
     {
@@ -49,5 +109,31 @@ public sealed class WorldState
         }
     }
 
-    public void RemoveDeleted() => _entities.RemoveAll(entity => entity.Removed);
+    public bool RemoveDeleted()
+    {
+        var deleted = false;
+        foreach (var world in new[] { Overworld, DimShardPocket })
+        {
+            foreach (var chunk in world.LoadedChunks.Values)
+            {
+                foreach (var removedNatural in chunk.NaturalEntities.Values.Where(entity => entity.Removed).ToArray())
+                {
+                    deleted |= world.RemoveEntity(removedNatural);
+                }
+
+                foreach (var removedRuntime in chunk.RuntimeEntities.Values.Where(entity => entity.Removed).ToArray())
+                {
+                    deleted |= world.RemoveEntity(removedRuntime);
+                }
+            }
+        }
+
+        if (deleted)
+        {
+            MarkEntityProjectionDirty();
+            EnsureEntityProjectionCurrent();
+        }
+
+        return deleted;
+    }
 }

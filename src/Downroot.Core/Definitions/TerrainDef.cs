@@ -10,4 +10,6 @@ public sealed record TerrainDef(
     int TileWidth,
     int TileHeight,
     int AtlasColumn,
-    int AtlasRow) : ContentDef(Id, DisplayName, SourcePackId);
+    int AtlasRow,
+    int VariantColumnCount = 1,
+    int VariantRowCount = 1) : ContentDef(Id, DisplayName, SourcePackId);

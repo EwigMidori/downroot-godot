@@ -1,3 +1,4 @@
+using Downroot.Content.Registries;
 using Downroot.Core.World;
 using Downroot.World.Generation.Passes;
 
@@ -5,14 +6,18 @@ namespace Downroot.World.Generation;
 
 public static class WorldGenPassFactory
 {
-    public static IWorldGenPass Create(WorldGenPassDef definition)
+    public static IWorldGenPass Create(ContentRegistrySet registries, WorldGenPassDef definition)
     {
         return definition.PassType switch
         {
-            "fill-terrain" => new FillTerrainPass(definition.TargetId, definition.PrimarySurfaceRegion ?? SurfaceRegions.DirtField),
-            "grass-region" => new GrassRegionPass(definition.TargetId),
-            "dirt-patch" => new DirtPatchPass(definition.TargetId),
-            "scatter-spawn" => new ScatterSpawnPass(
+            WorldGenPassTypes.FillTerrain => new FillTerrainPass(definition.TargetId, definition.PrimarySurfaceRegion ?? SurfaceRegions.DirtField),
+            WorldGenPassTypes.SurfaceRegion => new GrassRegionPass(definition.TargetId),
+            WorldGenPassTypes.River => new RiverPass(definition.TargetId),
+            WorldGenPassTypes.RaisedOreField => new RaisedOreFieldPass(definition.TargetId, new RaisedOreFieldRuleResolver(registries)),
+            WorldGenPassTypes.RockOutcrop => new RockOutcropPass(definition.TargetId),
+            WorldGenPassTypes.PortalSite => new PortalSitePass(definition.TargetId, registries.PortalWorldLinks.ToArray()),
+            WorldGenPassTypes.DirtPatch => new DirtPatchPass(definition.TargetId),
+            WorldGenPassTypes.ScatterSpawn => new ScatterSpawnPass(
                 definition.TargetId,
                 definition.Count,
                 definition.StartColumn,

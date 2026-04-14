@@ -15,6 +15,23 @@ public sealed class InventoryState
 
     public IReadOnlyList<InventorySlot> Slots => _slots;
 
+    public int SlotCount => _slots.Count;
+
+    public InventoryState Clone()
+    {
+        var clone = new InventoryState(_slots.Count);
+        for (var index = 0; index < _slots.Count; index++)
+        {
+            var slot = _slots[index];
+            if (slot.ItemId is not null && slot.Quantity > 0)
+            {
+                clone._slots[index].Set(slot.ItemId.Value, slot.Quantity);
+            }
+        }
+
+        return clone;
+    }
+
     public bool TryAdd(ContentId itemId, int quantity, ContentRegistrySet registries)
     {
         if (!registries.Items.TryGet(itemId, out var itemDef))
@@ -160,6 +177,44 @@ public sealed class InventoryState
         }
 
         return true;
+    }
+
+    public bool TryMoveSlotTo(int sourceIndex, InventoryState target, ContentRegistrySet registries)
+    {
+        if (sourceIndex < 0 || sourceIndex >= _slots.Count)
+        {
+            return false;
+        }
+
+        var source = _slots[sourceIndex];
+        if (source.ItemId is null || source.Quantity <= 0)
+        {
+            return false;
+        }
+
+        if (!target.TryAdd(source.ItemId.Value, source.Quantity, registries))
+        {
+            return false;
+        }
+
+        source.Clear();
+        return true;
+    }
+
+    public void SetSlot(int index, ContentId? itemId, int quantity)
+    {
+        if (index < 0 || index >= _slots.Count)
+        {
+            return;
+        }
+
+        if (itemId is null || quantity <= 0)
+        {
+            _slots[index].Clear();
+            return;
+        }
+
+        _slots[index].Set(itemId.Value, quantity);
     }
 
     private sealed class InventorySlotSnapshot(ContentId? itemId, int quantity)

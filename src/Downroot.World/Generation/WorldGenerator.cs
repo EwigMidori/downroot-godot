@@ -6,17 +6,17 @@ namespace Downroot.World.Generation;
 
 public sealed class WorldGenerator(ContentRegistrySet registries, IReadOnlyList<IWorldGenPass> passes)
 {
-    public WorldModel Generate(int width, int height)
+    public GeneratedChunk GenerateChunk(WorldSpaceKind worldSpaceKind, int worldSeed, ChunkCoord chunkCoord, int width, int height)
     {
         var spawns = new List<WorldSpawnDef>();
-        var world = new WorldModel(new ChunkData(width, height), spawns);
-        var context = new WorldGenContext(world, registries, spawns);
+        var surface = new ChunkData(width, height);
+        var context = new WorldGenContext(worldSpaceKind, worldSeed, chunkCoord, surface, registries, spawns);
 
         foreach (var pass in passes)
         {
             pass.Execute(context);
         }
 
-        return world;
+        return new GeneratedChunk(worldSpaceKind, chunkCoord, surface, spawns.ToArray());
     }
 }

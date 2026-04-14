@@ -1,0 +1,45 @@
+using System.Numerics;
+using Downroot.Core.Save;
+using Downroot.Core.World;
+using Downroot.Gameplay.Runtime;
+using Downroot.Gameplay.Runtime.Systems;
+
+namespace Downroot.Gameplay.Persistence;
+
+public sealed class GameSaveLoader
+{
+    private readonly InventoryPersistenceAdapter _inventoryAdapter = new();
+    private readonly WorldRuntimePersistenceAdapter _worldAdapter = new();
+
+    public void Load(GameRuntime runtime, SaveGameData save)
+    {
+        runtime.Player.Position = new Vector2(save.Player.PositionX, save.Player.PositionY);
+        runtime.Player.Facing = new Vector2(save.Player.FacingX, save.Player.FacingY);
+        runtime.Player.SelectedHotbarIndex = save.Player.SelectedHotbarIndex;
+        runtime.Player.Survival.SetHealth(save.Player.Health);
+        runtime.Player.Survival.SetHunger(save.Player.Hunger);
+        _inventoryAdapter.Import(runtime.Player.Inventory, save.Player.InventorySlots);
+
+        runtime.WorldState.TimeOfDaySeconds = save.TimeOfDaySeconds;
+        runtime.WorldState.TotalElapsedSeconds = save.TotalElapsedSeconds;
+        runtime.WorldState.ActiveFurnaceTask = null;
+        runtime.WorldState.WorkspaceMode = CraftWorkspaceMode.Hidden;
+        runtime.WorldState.ActiveStationEntityId = null;
+        runtime.WorldState.ActiveStationKind = null;
+        runtime.WorldState.ActiveStorageEntityId = null;
+        runtime.WorldState.CurrentInteraction = null;
+        runtime.WorldState.ActiveDestroyProgress = null;
+
+        foreach (var savedWorld in save.Worlds)
+        {
+            var worldSpaceKind = Enum.Parse<WorldSpaceKind>(savedWorld.WorldSpaceKind, ignoreCase: true);
+            _worldAdapter.Import(runtime.GetWorld(worldSpaceKind), savedWorld);
+        }
+
+        runtime.ActiveWorldSpaceKind = Enum.Parse<WorldSpaceKind>(save.ActiveWorldSpaceKind, ignoreCase: true);
+        var streamer = new WorldStreamingSystem(runtime, new WorldRuntimeFacade(runtime));
+        streamer.UpdateLoadedChunks();
+        runtime.WorldState.MarkEntityProjectionDirty();
+        runtime.WorldState.RefreshEntityProjection();
+    }
+}

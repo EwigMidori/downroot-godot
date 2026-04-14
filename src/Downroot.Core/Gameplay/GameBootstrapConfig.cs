@@ -3,8 +3,10 @@ using Downroot.Core.Ids;
 namespace Downroot.Core.Gameplay;
 
 public sealed record GameBootstrapConfig(
-    int WorldWidth,
-    int WorldHeight,
+    int ChunkWidth,
+    int ChunkHeight,
+    int WorldSeed,
+    int OverworldLoadRadius,
     ContentId DefaultTerrainId,
     ContentId PlayerCreatureId,
     ContentId DebugItemId,

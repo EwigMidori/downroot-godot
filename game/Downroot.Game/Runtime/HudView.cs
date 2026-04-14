@@ -51,6 +51,14 @@ public sealed partial class HudView : CanvasLayer
     public Label CraftInventoryTitleLabel { get; }
     public HFlowContainer CraftInventoryGrid { get; }
     public IReadOnlyList<SlotParts> InventorySlots { get; }
+    public VBoxContainer StorageRegion { get; }
+    public Label StorageTitleLabel { get; }
+    public HFlowContainer StorageGrid { get; }
+    public IReadOnlyList<SlotParts> StorageSlots { get; }
+    public PanelContainer TooltipPanel { get; }
+    public TextureRect TooltipIcon { get; }
+    public Label TooltipTitle { get; }
+    public Label TooltipDetail { get; }
 
     public HudView()
     {
@@ -197,7 +205,8 @@ public sealed partial class HudView : CanvasLayer
             Name = "RecipeListScroll",
             CustomMinimumSize = new Vector2(0, 260),
             HorizontalScrollMode = ScrollContainer.ScrollMode.Disabled,
-            SizeFlagsHorizontal = Control.SizeFlags.ExpandFill
+            SizeFlagsHorizontal = Control.SizeFlags.ExpandFill,
+            FocusMode = Control.FocusModeEnum.None
         };
         recipeRegion.AddChild(RecipeListScroll);
         RecipeListContainer = new VBoxContainer
@@ -230,6 +239,50 @@ public sealed partial class HudView : CanvasLayer
             CraftInventoryGrid.AddChild(slot.SlotRoot);
             return slot;
         }).ToArray();
+
+        StorageRegion = new VBoxContainer { Name = "StorageRegion", Visible = false };
+        SetSeparation(StorageRegion, 8);
+        craftBody.AddChild(StorageRegion);
+        StorageTitleLabel = new Label
+        {
+            Name = "StorageTitleLabel",
+            Text = "Storage"
+        };
+        StorageRegion.AddChild(StorageTitleLabel);
+        StorageGrid = new HFlowContainer
+        {
+            Name = "StorageGrid",
+            SizeFlagsHorizontal = Control.SizeFlags.ExpandFill
+        };
+        SetFlowSeparation(StorageGrid, 8, 8);
+        StorageRegion.AddChild(StorageGrid);
+        StorageSlots = Enumerable.Range(0, 16).Select(index =>
+        {
+            var slot = CreateSlot(index == 0 ? "StorageSlotWidget" : $"StorageSlotWidget{index + 1}", 42, false);
+            StorageGrid.AddChild(slot.SlotRoot);
+            return slot;
+        }).ToArray();
+
+        TooltipPanel = CreateFloatingPanel("TooltipPanel", new Vector2(220, 72));
+        TooltipPanel.Visible = false;
+        TooltipPanel.MouseFilter = Control.MouseFilterEnum.Ignore;
+        HudRoot.AddChild(TooltipPanel);
+        var tooltipRow = new HBoxContainer();
+        SetSeparation(tooltipRow, 8);
+        TooltipPanel.AddChild(tooltipRow);
+        TooltipIcon = new TextureRect
+        {
+            CustomMinimumSize = new Vector2(28, 28),
+            StretchMode = TextureRect.StretchModeEnum.KeepAspectCentered
+        };
+        tooltipRow.AddChild(TooltipIcon);
+        var tooltipStack = new VBoxContainer();
+        SetSeparation(tooltipStack, 2);
+        tooltipRow.AddChild(tooltipStack);
+        TooltipTitle = new Label();
+        TooltipDetail = new Label();
+        tooltipStack.AddChild(TooltipTitle);
+        tooltipStack.AddChild(TooltipDetail);
 
         _pointerBlockingPanels =
         [
@@ -324,7 +377,8 @@ public sealed partial class HudView : CanvasLayer
             Name = "RecipeCraftButton",
             Text = "Craft",
             CustomMinimumSize = new Vector2(72, 32),
-            MouseFilter = Control.MouseFilterEnum.Stop
+            MouseFilter = Control.MouseFilterEnum.Stop,
+            FocusMode = Control.FocusModeEnum.None
         };
         craftButton.Pressed += () => onCraft(recipe.RecipeId);
         topRow.AddChild(craftButton);
@@ -400,6 +454,36 @@ public sealed partial class HudView : CanvasLayer
         return chip;
     }
 
+    public void ShowTooltip(Texture2D? icon, string title, string detail, Vector2 screenPosition, Vector2 viewportSize)
+    {
+        TooltipPanel.Visible = true;
+        TooltipIcon.Texture = icon;
+        TooltipIcon.Visible = icon is not null;
+        TooltipTitle.Text = title;
+        TooltipDetail.Text = detail;
+        TooltipPanel.Size = TooltipPanel.GetCombinedMinimumSize();
+        TooltipPanel.Position = ResolveTooltipPosition(screenPosition, viewportSize);
+    }
+
+    public void HideTooltip()
+    {
+        TooltipPanel.Visible = false;
+    }
+
+    public void ApplyRecipeRowState(RecipeRowParts row, bool canCraft, bool isRunning)
+    {
+        row.RowRoot.AddThemeStyleboxOverride(
+            "panel",
+            isRunning
+                ? CreatePanelStyle(new Color(0.12f, 0.17f, 0.2f, 0.96f), new Color(0.52f, 0.82f, 0.95f))
+                : canCraft
+                    ? CreatePanelStyle(new Color(0.12f, 0.15f, 0.18f, 0.94f), new Color(0.58f, 0.76f, 0.38f))
+                    : CreatePanelStyle(new Color(0.08f, 0.09f, 0.12f, 0.8f), new Color(0.22f, 0.24f, 0.28f)));
+        row.RecipeUnavailableMask.Color = canCraft
+            ? new Color(1f, 1f, 1f, 0f)
+            : new Color(0f, 0f, 0f, 0.22f);
+    }
+
     public Texture2D CreatePromptIcon(PromptIconKind kind)
     {
         return kind switch
@@ -444,7 +528,9 @@ public sealed partial class HudView : CanvasLayer
         var slotRoot = new Control
         {
             Name = name,
-            CustomMinimumSize = new Vector2(size, size)
+            CustomMinimumSize = new Vector2(size, size),
+            FocusMode = Control.FocusModeEnum.None,
+            MouseFilter = Control.MouseFilterEnum.Stop
         };
 
         var background = new Panel
@@ -651,5 +737,13 @@ public sealed partial class HudView : CanvasLayer
     {
         container.AddThemeConstantOverride("h_separation", horizontal);
         container.AddThemeConstantOverride("v_separation", vertical);
+    }
+
+    private Vector2 ResolveTooltipPosition(Vector2 screenPosition, Vector2 viewportSize)
+    {
+        var desired = screenPosition + new Vector2(18f, 18f);
+        desired.X = Mathf.Clamp(desired.X, 8f, Math.Max(8f, viewportSize.X - TooltipPanel.Size.X - 8f));
+        desired.Y = Mathf.Clamp(desired.Y, 8f, Math.Max(8f, viewportSize.Y - TooltipPanel.Size.Y - 8f));
+        return desired;
     }
 }

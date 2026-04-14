@@ -8,13 +8,18 @@ public sealed class TextureContentLoader(PackPathResolver packPathResolver)
 {
     public TextureLoadResult LoadTerrain(TerrainDef terrainDef)
     {
+        return LoadTerrain(terrainDef, terrainDef.AtlasColumn, terrainDef.AtlasRow);
+    }
+
+    public TextureLoadResult LoadTerrain(TerrainDef terrainDef, int atlasColumn, int atlasRow)
+    {
         var texture = LoadTexture(terrainDef.Id.Value, terrainDef.TexturePath);
         var atlas = new AtlasTexture
         {
             Atlas = texture.Texture,
             Region = new Rect2(
-                terrainDef.AtlasColumn * terrainDef.TileWidth,
-                terrainDef.AtlasRow * terrainDef.TileHeight,
+                atlasColumn * terrainDef.TileWidth,
+                atlasRow * terrainDef.TileHeight,
                 terrainDef.TileWidth,
                 terrainDef.TileHeight)
         };
@@ -49,6 +54,20 @@ public sealed class TextureContentLoader(PackPathResolver packPathResolver)
         return texture with
         {
             Texture = ToAtlas(texture.Texture, resourceNodeDef.SpriteWidth, resourceNodeDef.SpriteHeight, resourceNodeDef.AtlasColumn, resourceNodeDef.AtlasRow)
+        };
+    }
+
+    public TextureLoadResult LoadRaisedFeature(RaisedFeatureDef raisedFeatureDef, byte variantIndex)
+    {
+        if (variantIndex >= raisedFeatureDef.AutoTileColumnCount)
+        {
+            throw new ArgumentOutOfRangeException(nameof(variantIndex), $"Raised feature variant {variantIndex} exceeds atlas column count {raisedFeatureDef.AutoTileColumnCount}.");
+        }
+
+        var texture = LoadTexture(raisedFeatureDef.Id.Value, raisedFeatureDef.TexturePath);
+        return texture with
+        {
+            Texture = ToAtlas(texture.Texture, raisedFeatureDef.TileWidth, raisedFeatureDef.TileHeight, variantIndex, 0)
         };
     }
 
