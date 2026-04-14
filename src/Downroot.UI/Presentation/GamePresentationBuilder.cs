@@ -32,7 +32,7 @@ public sealed class GamePresentationBuilder
             ResolveNightOverlayAlpha(timeProgress),
             ToPercent(runtime.Player.Survival.Health, runtime.Player.Survival.MaxHealth),
             ToPercent(runtime.Player.Survival.Hunger, runtime.Player.Survival.MaxHunger),
-            Math.Clamp(runtime.WorldState.PlayerHitFlashSeconds / 0.18f, 0f, 1f) * 0.45f);
+            Math.Clamp(runtime.WorldState.PlayerHitFlashSeconds / 0.18f, 0f, 1f) * 0.62f);
     }
 
     public IReadOnlyList<HotbarSlotViewData> BuildHotbar(GameRuntime runtime)

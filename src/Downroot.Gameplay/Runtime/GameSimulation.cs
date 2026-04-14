@@ -23,13 +23,15 @@ public sealed class GameSimulation
     private readonly DestroySystem _destroySystem;
     private readonly CraftingSystem _craftingSystem;
     private readonly CreatureSystem _creatureSystem;
+    private readonly DebugRuntimeState? _debugState;
 
     private bool _previousDestroyHeld;
     private bool _suppressDestroyUntilRelease;
 
-    public GameSimulation(GameRuntime runtime)
+    public GameSimulation(GameRuntime runtime, DebugRuntimeState? debugState = null)
     {
         _runtime = runtime;
+        _debugState = debugState;
         _worldFacade = new WorldRuntimeFacade(runtime);
         _worldQuery = new WorldQueryService(runtime, _worldFacade);
         _worldStreamingSystem = new WorldStreamingSystem(runtime, _worldFacade);
@@ -145,7 +147,8 @@ public sealed class GameSimulation
                 input,
                 _suppressDestroyUntilRelease,
                 selectedItemDef?.MeleeDamage is > 0 && nearestCreature is not null,
-                selectedItemDef);
+                selectedItemDef,
+                _debugState?.FastBreak ?? false);
         }
 
         using (RuntimeProfiler.Measure("GameSimulation.Creatures"))
@@ -375,6 +378,11 @@ public sealed class GameSimulation
     private void DamagePlayer(int amount)
     {
         if (amount <= 0)
+        {
+            return;
+        }
+
+        if (_debugState?.GodMode == true)
         {
             return;
         }

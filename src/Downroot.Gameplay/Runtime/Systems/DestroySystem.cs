@@ -10,7 +10,7 @@ public sealed class DestroySystem(GameRuntime runtime, WorldRuntimeFacade worldF
     private const float InteractionRange = 48f;
     private readonly Dictionary<WorldTileCoord, float> _raisedFeatureDamage = [];
 
-    public void HandleDestroy(float deltaSeconds, InputFrame input, bool suppressDestroyUntilRelease, bool suppressBecauseAttacking, ItemDef? selectedItemDef)
+    public void HandleDestroy(float deltaSeconds, InputFrame input, bool suppressDestroyUntilRelease, bool suppressBecauseAttacking, ItemDef? selectedItemDef, bool fastBreak)
     {
         if (suppressDestroyUntilRelease || suppressBecauseAttacking)
         {
@@ -25,7 +25,7 @@ public sealed class DestroySystem(GameRuntime runtime, WorldRuntimeFacade worldF
             return;
         }
 
-        var breakDuration = GetBreakDuration(target, selectedItemDef);
+        var breakDuration = fastBreak ? 0.05f : GetBreakDuration(target, selectedItemDef);
         var progressValue = target.IsRaisedFeature
             ? AddRaisedFeatureDamage(target.Tile, deltaSeconds)
             : AddEntityDamage(target.Entity!, deltaSeconds);

@@ -2,7 +2,6 @@ using Downroot.Core.Ids;
 using Downroot.Core.Input;
 using Downroot.Core.Diagnostics;
 using Downroot.Game.Infrastructure;
-using Downroot.Gameplay.Bootstrap;
 using Downroot.Gameplay.Runtime;
 using Godot;
 using NumericsVector2 = System.Numerics.Vector2;
@@ -21,6 +20,28 @@ public partial class GameRoot : Node2D
     private HudController? _hudController;
     private CanvasLayer? _travelOverlayLayer;
     private ColorRect? _travelOverlay;
+    private DebugRuntimeState? _debugState;
+    private DebugPanelController? _debugPanel;
+    private Action? _saveAction;
+    private Action? _reloadAction;
+    private bool _initialized;
+    private bool _previousDebugToggleHeld;
+
+    public GameRuntime Runtime => _runtime ?? throw new InvalidOperationException("GameRoot has not been configured.");
+    public GameSimulation Simulation => _simulation ?? throw new InvalidOperationException("GameRoot has not been configured.");
+
+    public void Configure(GameRuntime runtime, DebugRuntimeState debugState, Action saveAction, Action reloadAction)
+    {
+        if (_initialized || _runtime is not null)
+        {
+            throw new InvalidOperationException("GameRoot has already been configured.");
+        }
+
+        _runtime = runtime;
+        _debugState = debugState;
+        _saveAction = saveAction;
+        _reloadAction = reloadAction;
+    }
 
     public override void _Ready()
     {
@@ -32,8 +53,12 @@ public partial class GameRoot : Node2D
 
             _startupOverlay.UpdateStatus("Bootstrapping runtime");
             RuntimeProfiler.Configure(message => GD.Print(message), frameWindow: 60);
-            _runtime = new GameBootstrapper().Bootstrap();
-            _simulation = new GameSimulation(_runtime);
+            if (_runtime is null)
+            {
+                throw new InvalidOperationException("GameRoot requires a preconfigured runtime.");
+            }
+
+            _simulation = new GameSimulation(_runtime, _debugState);
 
             _startupOverlay.UpdateStatus("Resolving content root");
             var packPathResolver = new PackPathResolver();
@@ -56,6 +81,7 @@ public partial class GameRoot : Node2D
             AddChild(_worldRenderer);
             _worldRenderer.Initialize(_runtime);
             InitializeTravelOverlay();
+            _debugPanel = new DebugPanelController(this, _debugState!, new DebugCommandExecutor(_runtime, _debugState!, () => _saveAction?.Invoke(), () => _reloadAction?.Invoke()));
 
             _startupOverlay.UpdateStatus("Validating content");
             _worldRenderer.ValidateContentLoads(_runtime);
@@ -63,6 +89,7 @@ public partial class GameRoot : Node2D
             _worldRenderer.Update(new InputFrame(default, default, false, false, false, false, false, false, 0, null));
             _hudController.Refresh(_runtime, _worldRenderer.WorldToScreen);
             _startupOverlay.Hide();
+            _initialized = true;
         }
         catch (Exception exception)
         {
@@ -81,6 +108,13 @@ public partial class GameRoot : Node2D
 
         RuntimeProfiler.BeginFrame();
         using var frameScope = RuntimeProfiler.Measure("GameRoot.PhysicsProcess");
+        var debugToggleHeld = Input.IsKeyPressed(Key.F9);
+        if (debugToggleHeld && !_previousDebugToggleHeld)
+        {
+            _debugPanel?.ToggleVisibility();
+        }
+        _previousDebugToggleHeld = debugToggleHeld;
+
         var frame = _inputService.CaptureFrame();
         using (RuntimeProfiler.Measure("GameRoot.Simulation"))
         {
@@ -101,6 +135,9 @@ public partial class GameRoot : Node2D
         {
             UpdateTravelOverlay();
         }
+
+        _worldRenderer.SetShowChunkBounds(_debugState?.ShowChunkBounds ?? false);
+        _debugPanel?.Refresh();
 
         RuntimeProfiler.EndFrame();
     }

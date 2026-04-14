@@ -1,5 +1,6 @@
 using Downroot.Content.Registries;
 using Downroot.Core.Gameplay;
+using Downroot.Gameplay.Bootstrap;
 using Downroot.Core.World;
 using Downroot.World.Generation;
 using System.Numerics;
@@ -20,6 +21,10 @@ public sealed class GameRuntime(
     public WorldState WorldState { get; } = worldState;
     public PlayerState Player { get; } = player;
     public GameBootstrapConfig BootstrapConfig { get; } = bootstrapConfig;
+    public GameStartOptions? StartOptions { get; set; }
+    public string? SaveSlotId => StartOptions?.SaveSlotId;
+    public string? SaveDisplayName => StartOptions?.DisplayName;
+    public int WorldSeed => StartOptions?.WorldSeed ?? BootstrapConfig.WorldSeed;
 
     public WorldSpaceKind ActiveWorldSpaceKind
     {

@@ -1,5 +1,6 @@
 using Downroot.Content.Registries;
 using Downroot.Core.Ids;
+using Downroot.Core.Save;
 using Downroot.Core.World;
 using Downroot.World.Models;
 using System.Numerics;
@@ -33,6 +34,8 @@ public sealed class LoadedWorldState
     public long BlockerVersion { get; private set; }
 
     public bool ContainsChunk(ChunkCoord coord) => Model.ContainsChunk(coord);
+
+    public IReadOnlyDictionary<ChunkCoord, ChunkRuntimeArchive> ArchivedChunks => _archivedChunks;
 
     public IEnumerable<WorldEntityState> EnumerateEntities() => EnumerateLoadedEntities();
 
@@ -193,6 +196,70 @@ public sealed class LoadedWorldState
 
             IncrementChunkVisualVersion();
             IncrementEntityStructureVersion();
+        }
+    }
+
+    public IReadOnlyList<SavedChunkRuntimeData> ExportPersistedChunks()
+    {
+        var persisted = new Dictionary<ChunkCoord, SavedChunkRuntimeData>();
+        foreach (var archived in _archivedChunks)
+        {
+            persisted[archived.Key] = new SavedChunkRuntimeData
+            {
+                ChunkX = archived.Key.X,
+                ChunkY = archived.Key.Y,
+                DestroyedNaturalEntityIds = archived.Value.DestroyedNaturalEntityIds.ToArray(),
+                CollectedNaturalDropIds = archived.Value.CollectedNaturalDropIds.ToArray(),
+                RemovedRaisedFeatureTiles = archived.Value.RemovedRaisedFeatureTiles.Select(tile => $"{tile.X},{tile.Y}").ToArray(),
+                RuntimeEntities = archived.Value.RuntimeEntities.Select(entity => new SavedRuntimeEntityData
+                {
+                    EntityId = entity.Id.Value.ToByteArray().AsSpan(0, 8).ToArray().Aggregate(0L, (current, next) => (current << 8) | next),
+                    EntityKind = entity.Kind.ToString(),
+                    DefinitionId = entity.DefinitionId.Value,
+                    PositionX = entity.Position.X,
+                    PositionY = entity.Position.Y,
+                    Durability = entity.Durability,
+                    WorldSpaceKind = entity.WorldSpaceKind.ToString(),
+                    ChunkX = entity.ChunkCoord.X,
+                    ChunkY = entity.ChunkCoord.Y,
+                    IsNatural = entity.IsNatural,
+                    StableNaturalEntityId = entity.StableNaturalEntityId,
+                    StackCount = entity.StackCount,
+                    Removed = entity.Removed,
+                    OpenState = entity.OpenState,
+                    StorageInventorySlots = entity.StorageInventory?.Slots.Select((slot, index) => new SavedInventorySlotData
+                    {
+                        SlotIndex = index,
+                        ItemId = slot.ItemId?.Value,
+                        Quantity = slot.Quantity
+                    }).ToArray()
+                }).ToArray()
+            };
+        }
+
+        foreach (var chunk in _loadedChunks.Values)
+        {
+            if (!chunk.HasPersistentState())
+            {
+                continue;
+            }
+
+            persisted[chunk.GeneratedChunk.Coord] = chunk.ToSavedData();
+        }
+
+        return persisted.Values
+            .OrderBy(chunk => chunk.ChunkY)
+            .ThenBy(chunk => chunk.ChunkX)
+            .ToArray();
+    }
+
+    public void ImportPersistedChunks(IEnumerable<SavedChunkRuntimeData> chunks)
+    {
+        _archivedChunks.Clear();
+        foreach (var chunk in chunks)
+        {
+            var coord = new ChunkCoord(chunk.ChunkX, chunk.ChunkY);
+            _archivedChunks[coord] = ChunkRuntimeState.CreateArchive(chunk);
         }
     }
 

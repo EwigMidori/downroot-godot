@@ -2,6 +2,8 @@ using System.Numerics;
 using Downroot.Content.Packs;
 using Downroot.Content.Registries;
 using Downroot.Core.World;
+using Downroot.Core.Save;
+using Downroot.Gameplay.Persistence;
 using Downroot.Gameplay.Runtime;
 using Downroot.World.Generation;
 using Downroot.World.Models;
@@ -11,6 +13,20 @@ namespace Downroot.Gameplay.Bootstrap;
 public sealed class GameBootstrapper
 {
     public GameRuntime Bootstrap()
+    {
+        return Bootstrap(new GameBootstrapRequest
+        {
+            StartOptions = new GameStartOptions
+            {
+                SaveSlotId = "quick-start",
+                DisplayName = "Quick Start",
+                WorldSeed = 1337,
+                IsNewGame = true
+            }
+        });
+    }
+
+    public GameRuntime Bootstrap(GameBootstrapRequest request)
     {
         var registries = new ContentRegistrySet();
         var registrar = registries.CreateRegistrar();
@@ -22,6 +38,7 @@ public sealed class GameBootstrapper
 
         var bootstrapConfig = registries.BootstrapConfig
             ?? throw new InvalidOperationException("No bootstrap config was registered by any content pack.");
+        bootstrapConfig = bootstrapConfig with { WorldSeed = request.StartOptions.WorldSeed };
         var portalLink = GetDimShardPortalLink(registries);
 
         var overworldModel = new WorldModel("overworld", WorldSpaceKind.Overworld, bootstrapConfig.WorldSeed);
@@ -58,14 +75,25 @@ public sealed class GameBootstrapper
             CreateGenerator(registries, WorldSpaceKind.DimShardPocket),
             worldState,
             player,
-            bootstrapConfig);
+            bootstrapConfig)
+        {
+            StartOptions = request.StartOptions
+        };
         ValidatePocketWorld(runtime, portalLink);
 
         var spawnChunk = bootstrapConfig.PlayerSpawn.Tile.ToChunkCoord(runtime.ChunkWidth, runtime.ChunkHeight);
         LoadInitialChunks(runtime, runtime.Overworld, spawnChunk);
-        AddDebugWorkbench(runtime);
+        if (request.ExistingSave is null)
+        {
+            AddDebugWorkbench(runtime);
+        }
+        else
+        {
+            new GameSaveLoader().Load(runtime, request.ExistingSave);
+        }
+
         runtime.WorldState.RefreshEntityProjection();
-        LogLoadedWorld(runtime.Overworld);
+        LogLoadedWorld(runtime.GetWorld(runtime.ActiveWorldSpaceKind));
         return runtime;
     }
 

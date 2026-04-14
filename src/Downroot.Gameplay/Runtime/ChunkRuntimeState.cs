@@ -1,4 +1,5 @@
 using Downroot.Core.Ids;
+using Downroot.Core.Save;
 using Downroot.Core.World;
 using Downroot.World.Models;
 
@@ -57,6 +58,22 @@ public sealed class ChunkRuntimeState
             || _runtimeEntities.Values.Any(entity => !entity.Removed);
     }
 
+    public SavedChunkRuntimeData ToSavedData()
+    {
+        return new SavedChunkRuntimeData
+        {
+            ChunkX = GeneratedChunk.Coord.X,
+            ChunkY = GeneratedChunk.Coord.Y,
+            DestroyedNaturalEntityIds = DestroyedNaturalEntityIds.OrderBy(id => id).ToArray(),
+            CollectedNaturalDropIds = CollectedNaturalDropIds.OrderBy(id => id).ToArray(),
+            RemovedRaisedFeatureTiles = RemovedRaisedFeatureTiles.Select(tile => $"{tile.X},{tile.Y}").OrderBy(value => value).ToArray(),
+            RuntimeEntities = _runtimeEntities.Values
+                .Where(entity => !entity.Removed)
+                .Select(ToSavedRuntimeEntity)
+                .ToArray()
+        };
+    }
+
     public ChunkRuntimeArchive CreateArchive()
     {
         return new ChunkRuntimeArchive(
@@ -84,6 +101,83 @@ public sealed class ChunkRuntimeState
         {
             _runtimeEntities[runtimeEntity.Id] = runtimeEntity.Clone();
         }
+    }
+
+    public static ChunkRuntimeArchive CreateArchive(SavedChunkRuntimeData savedChunk)
+    {
+        return new ChunkRuntimeArchive(
+            savedChunk.DestroyedNaturalEntityIds.ToArray(),
+            savedChunk.CollectedNaturalDropIds.ToArray(),
+            savedChunk.RemovedRaisedFeatureTiles.Select(ParseTile).ToArray(),
+            savedChunk.RuntimeEntities.Select(FromSavedRuntimeEntity).ToArray());
+    }
+
+    private static SavedRuntimeEntityData ToSavedRuntimeEntity(WorldEntityState entity)
+    {
+        return new SavedRuntimeEntityData
+        {
+            EntityId = entity.Id.Value.ToByteArray().AsSpan(0, 8).ToArray().Aggregate(0L, (current, next) => (current << 8) | next),
+            EntityKind = entity.Kind.ToString(),
+            DefinitionId = entity.DefinitionId.Value,
+            PositionX = entity.Position.X,
+            PositionY = entity.Position.Y,
+            Durability = entity.Durability,
+            WorldSpaceKind = entity.WorldSpaceKind.ToString(),
+            ChunkX = entity.ChunkCoord.X,
+            ChunkY = entity.ChunkCoord.Y,
+            IsNatural = entity.IsNatural,
+            StableNaturalEntityId = entity.StableNaturalEntityId,
+            StackCount = entity.StackCount,
+            Removed = entity.Removed,
+            OpenState = entity.OpenState,
+            StorageInventorySlots = entity.StorageInventory?.Slots
+                .Select((slot, index) => new SavedInventorySlotData
+                {
+                    SlotIndex = index,
+                    ItemId = slot.ItemId?.Value,
+                    Quantity = slot.Quantity
+                })
+                .ToArray()
+        };
+    }
+
+    private static WorldEntityState FromSavedRuntimeEntity(SavedRuntimeEntityData savedEntity)
+    {
+        var worldSpaceKind = Enum.Parse<WorldSpaceKind>(savedEntity.WorldSpaceKind, ignoreCase: true);
+        var entityKind = Enum.Parse<WorldEntityKind>(savedEntity.EntityKind, ignoreCase: true);
+        var entity = new WorldEntityState(
+            entityKind,
+            new ContentId(savedEntity.DefinitionId),
+            new System.Numerics.Vector2(savedEntity.PositionX, savedEntity.PositionY),
+            savedEntity.Durability,
+            worldSpaceKind,
+            new ChunkCoord(savedEntity.ChunkX, savedEntity.ChunkY),
+            savedEntity.IsNatural,
+            savedEntity.StableNaturalEntityId,
+            savedEntity.StackCount)
+        {
+            Removed = savedEntity.Removed,
+            OpenState = savedEntity.OpenState
+        };
+
+        if (savedEntity.StorageInventorySlots is { Count: > 0 } storageSlots)
+        {
+            var inventory = new InventoryState(storageSlots.Max(slot => slot.SlotIndex) + 1);
+            foreach (var slot in storageSlots)
+            {
+                inventory.SetSlot(slot.SlotIndex, slot.ItemId is null ? null : new ContentId(slot.ItemId), slot.Quantity);
+            }
+
+            entity.StorageInventory = inventory;
+        }
+
+        return entity;
+    }
+
+    private static WorldTileCoord ParseTile(string value)
+    {
+        var parts = value.Split(',', StringSplitOptions.TrimEntries | StringSplitOptions.RemoveEmptyEntries);
+        return new WorldTileCoord(int.Parse(parts[0]), int.Parse(parts[1]));
     }
 }
 

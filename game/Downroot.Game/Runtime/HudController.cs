@@ -29,6 +29,7 @@ public sealed class HudController
     private string? _recipeStateKey;
     private string? _lastLayoutKey;
     private CraftingPanelViewData? _cachedCraftingPanel;
+    private Control? _tooltipSource;
 
     public HudController(Node host, TextureContentLoader textureLoader)
     {
@@ -51,12 +52,19 @@ public sealed class HudController
         {
             var inventoryIndex = index;
             _view.InventorySlots[index].SlotRoot.GuiInput += @event => OnInventorySlotInput(inventoryIndex, @event);
+            BindTooltipLifecycle(_view.InventorySlots[index].SlotRoot);
         }
 
         for (var index = 0; index < _view.StorageSlots.Count; index++)
         {
             var storageIndex = index;
             _view.StorageSlots[index].SlotRoot.GuiInput += @event => OnStorageSlotInput(storageIndex, @event);
+            BindTooltipLifecycle(_view.StorageSlots[index].SlotRoot);
+        }
+
+        for (var index = 0; index < _view.HotbarSlots.Count; index++)
+        {
+            BindTooltipLifecycle(_view.HotbarSlots[index].SlotRoot);
         }
     }
 
@@ -97,6 +105,8 @@ public sealed class HudController
         {
             RefreshDestroyProgress(runtime, worldToScreen);
         }
+
+        RefreshTooltip(runtime);
     }
 
     private void RefreshHudStatus(GameRuntime runtime)
@@ -128,6 +138,11 @@ public sealed class HudController
         {
             var slotView = hotbar[index];
             _view.SetSlot(_view.HotbarSlots[index], ResolveItemIcon(slotView.ItemId, runtime), slotView.Quantity, slotView.IsSelected);
+            SetTooltipData(
+                _view.HotbarSlots[index].SlotRoot,
+                slotView.ItemId,
+                ResolveItemName(slotView.ItemId, runtime),
+                slotView.Quantity > 0 ? $"Quantity: {slotView.Quantity}" : "Empty slot");
         }
 
         _lastHotbarSignature = signature;
@@ -184,6 +199,11 @@ public sealed class HudController
                     : index == runtime.Player.SelectedHotbarIndex
                         ? "Current hand slot"
                         : $"Click to move into hotbar slot {runtime.Player.SelectedHotbarIndex + 1}";
+                SetTooltipData(
+                    _view.InventorySlots[index].SlotRoot,
+                    slotView.ItemId,
+                    ResolveItemName(slotView.ItemId, runtime),
+                    slotView.Quantity > 0 ? $"Quantity: {slotView.Quantity}" : _view.InventorySlots[index].SlotRoot.TooltipText);
             }
 
             _lastInventorySignature = inventorySignature;
@@ -200,6 +220,11 @@ public sealed class HudController
                 _view.StorageSlots[index].SlotRoot.TooltipText = panelViewData.StorageSlots.Count > 0
                     ? "Click to move into inventory"
                     : string.Empty;
+                SetTooltipData(
+                    _view.StorageSlots[index].SlotRoot,
+                    slotView.ItemId,
+                    ResolveItemName(slotView.ItemId, runtime),
+                    slotView.Quantity > 0 ? $"Quantity: {slotView.Quantity}" : _view.StorageSlots[index].SlotRoot.TooltipText);
             }
 
             _lastStorageSignature = storageSignature;
@@ -306,6 +331,9 @@ public sealed class HudController
         {
             var row = _view.CreateRecipeRow(recipe, OnCraftRequested);
             SyncCostChips(row, recipe, runtime);
+            BindTooltipLifecycle(row.RecipeResultIcon);
+            SetTooltipData(row.RecipeResultIcon, recipe.ResultItemId, recipe.RecipeName, recipe.ActionLabel);
+            _view.ApplyRecipeRowState(row, recipe.CanCraft, recipe.IsRunning);
 
             _view.RecipeListContainer.AddChild(row.RowRoot);
             _recipeRows[recipe.RecipeId] = row;
@@ -325,6 +353,7 @@ public sealed class HudController
             row.RecipeNameLabel.Text = recipe.RecipeName;
             row.RecipeNameLabel.TooltipText = recipe.RecipeName;
             row.RecipeNameLabel.Modulate = recipe.CanCraft ? Colors.White : new Color(0.72f, 0.72f, 0.72f);
+            SetTooltipData(row.RecipeResultIcon, recipe.ResultItemId, recipe.RecipeName, recipe.ActionLabel);
 
             SyncCostChips(row, recipe, runtime);
 
@@ -333,6 +362,7 @@ public sealed class HudController
             row.RecipeProgressWidget.BarRoot.Visible = recipe.IsRunning || recipe.ActionLabel == "Smelt";
             _view.SetBarValue(row.RecipeProgressWidget, recipe.Progress01);
             row.RecipeUnavailableMask.Visible = !recipe.CanCraft;
+            _view.ApplyRecipeRowState(row, recipe.CanCraft, recipe.IsRunning);
         }
     }
 
@@ -368,6 +398,21 @@ public sealed class HudController
                 row.RecipeCostContainer.AddChild(_view.CreateCostChip(cost, ResolveItemIcon(cost.ItemId, runtime)));
             }
 
+            for (var index = 0; index < recipe.Costs.Count; index++)
+            {
+                if (row.RecipeCostContainer.GetChild(index) is Control chip)
+                {
+                    BindTooltipLifecycle(chip);
+                    SetTooltipData(
+                        chip,
+                        recipe.Costs[index].ItemId,
+                        recipe.Costs[index].ItemName,
+                        recipe.Costs[index].IsSatisfied
+                            ? $"Need x{recipe.Costs[index].Amount}"
+                            : $"Missing {recipe.Costs[index].MissingAmount} of {recipe.Costs[index].Amount}");
+                }
+            }
+
             return;
         }
 
@@ -397,6 +442,14 @@ public sealed class HudController
                     amountLabel.Modulate = cost.IsSatisfied ? new Color(0.74f, 0.92f, 0.74f) : new Color(0.96f, 0.62f, 0.62f);
                 }
             }
+
+            SetTooltipData(
+                chip,
+                cost.ItemId,
+                cost.ItemName,
+                cost.IsSatisfied
+                    ? $"Need x{cost.Amount}"
+                    : $"Missing {cost.MissingAmount} of {cost.Amount}");
         }
     }
 
@@ -508,5 +561,67 @@ public sealed class HudController
         }
 
         return storageHash.ToHashCode();
+    }
+
+    private void BindTooltipLifecycle(Control control)
+    {
+        control.MouseEntered += () => _tooltipSource = control;
+        control.MouseExited += () =>
+        {
+            if (_tooltipSource == control)
+            {
+                _tooltipSource = null;
+            }
+        };
+    }
+
+    private void SetTooltipData(Control control, ContentId? itemId, string title, string detail)
+    {
+        control.SetMeta("tooltip_item_id", itemId?.Value ?? string.Empty);
+        control.SetMeta("tooltip_title", title);
+        control.SetMeta("tooltip_detail", detail);
+    }
+
+    private void RefreshTooltip(GameRuntime runtime)
+    {
+        if (_tooltipSource is null || !GodotObject.IsInstanceValid(_tooltipSource) || !_tooltipSource.IsVisibleInTree())
+        {
+            _tooltipSource = null;
+            _view.HideTooltip();
+            return;
+        }
+
+        var tooltipSource = _tooltipSource;
+        var title = tooltipSource.GetMeta("tooltip_title", string.Empty).AsString();
+        var detail = tooltipSource.GetMeta("tooltip_detail", string.Empty).AsString();
+        if (string.IsNullOrWhiteSpace(title) && string.IsNullOrWhiteSpace(detail))
+        {
+            _view.HideTooltip();
+            return;
+        }
+
+        var itemIdValue = tooltipSource.GetMeta("tooltip_item_id", string.Empty).AsString();
+        var itemId = string.IsNullOrWhiteSpace(itemIdValue) ? (ContentId?)null : new ContentId(itemIdValue);
+        _view.ShowTooltip(
+            itemId is null ? null : ResolveItemIcon(itemId, runtime),
+            title,
+            detail,
+            _host.GetViewport().GetMousePosition(),
+            _host.GetViewport().GetVisibleRect().Size);
+    }
+
+    private string ResolveItemName(ContentId? itemId, GameRuntime runtime)
+    {
+        if (itemId is null)
+        {
+            return "Empty";
+        }
+
+        if (!runtime.Content.Items.TryGet(itemId.Value, out var item))
+        {
+            return itemId.Value.Value;
+        }
+
+        return item!.DisplayName;
     }
 }

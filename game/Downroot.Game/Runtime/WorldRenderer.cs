@@ -38,6 +38,7 @@ public sealed partial class WorldRenderer : Node2D
     private WorldSpaceKind? _lastRenderedWorldSpaceKind;
     private long _lastChunkVisualVersion = -1;
     private long _lastEntityProjectionVersion = -1;
+    private bool _showChunkBounds;
 
     public WorldRenderer(TextureContentLoader textureLoader, PlayerAnimationFactory animationFactory)
     {
@@ -150,6 +151,20 @@ public sealed partial class WorldRenderer : Node2D
         return ResolveItemTexture(_runtime!.Content.Items.Get(itemId));
     }
 
+    public void SetShowChunkBounds(bool enabled)
+    {
+        if (_showChunkBounds == enabled)
+        {
+            return;
+        }
+
+        _showChunkBounds = enabled;
+        foreach (var visual in _chunkVisuals.Values)
+        {
+            visual.BoundsRoot.Visible = enabled;
+        }
+    }
+
     private void SynchronizeWorldVisuals()
     {
         var activeWorld = _worldFacade!.GetActiveWorld();
@@ -178,6 +193,7 @@ public sealed partial class WorldRenderer : Node2D
         var desiredChunks = world.LoadedChunks.Keys.ToHashSet();
         foreach (var staleChunk in _chunkVisuals.Keys.Where(coord => !desiredChunks.Contains(coord)).ToArray())
         {
+            _chunkVisuals[staleChunk].BoundsRoot.QueueFree();
             _chunkVisuals[staleChunk].TerrainRoot.QueueFree();
             _chunkVisuals[staleChunk].RaisedFeatureRoot.QueueFree();
             _chunkVisuals[staleChunk].EntityRoot.QueueFree();
@@ -194,10 +210,12 @@ public sealed partial class WorldRenderer : Node2D
             var terrainRoot = new Node2D { Name = $"ChunkTerrain_{pair.Key.X}_{pair.Key.Y}" };
             var raisedFeatureRoot = new Node2D { Name = $"ChunkRaised_{pair.Key.X}_{pair.Key.Y}", ZIndex = RaisedFeatureLayerZ };
             var entityRoot = new Node2D { Name = $"ChunkEntities_{pair.Key.X}_{pair.Key.Y}" };
+            var boundsRoot = BuildChunkBounds(pair.Key);
             _terrainLayer!.AddChild(terrainRoot);
             _terrainLayer.AddChild(raisedFeatureRoot);
+            _terrainLayer.AddChild(boundsRoot);
             _entityLayer!.AddChild(entityRoot);
-            _chunkVisuals.Add(pair.Key, new ChunkVisualState(terrainRoot, raisedFeatureRoot, entityRoot));
+            _chunkVisuals.Add(pair.Key, new ChunkVisualState(terrainRoot, raisedFeatureRoot, entityRoot, boundsRoot));
             BuildChunkTerrain(pair.Value.GeneratedChunk, terrainRoot);
             BuildChunkRaisedFeatures(pair.Value, _chunkVisuals[pair.Key]);
         }
@@ -210,6 +228,7 @@ public sealed partial class WorldRenderer : Node2D
             visual.TerrainRoot.QueueFree();
             visual.RaisedFeatureRoot.QueueFree();
             visual.EntityRoot.QueueFree();
+            visual.BoundsRoot.QueueFree();
         }
 
         _chunkVisuals.Clear();
@@ -732,14 +751,39 @@ public sealed partial class WorldRenderer : Node2D
 
     private static Vector2 ToGodot(NumericsVector2 vector) => new(vector.X, vector.Y);
 
+    private Node2D BuildChunkBounds(ChunkCoord coord)
+    {
+        var root = new Node2D
+        {
+            Name = $"ChunkBounds_{coord.X}_{coord.Y}",
+            Visible = _showChunkBounds,
+            ZIndex = RaisedFeatureLayerZ + 100
+        };
+        var chunkPixelWidth = _runtime!.ChunkWidth * TileSize;
+        var chunkPixelHeight = _runtime.ChunkHeight * TileSize;
+        var line = new Line2D
+        {
+            Width = 2f,
+            DefaultColor = new Color(0.2f, 0.9f, 1f, 0.85f),
+            Closed = true
+        };
+        line.AddPoint(new Vector2(coord.X * chunkPixelWidth, coord.Y * chunkPixelHeight));
+        line.AddPoint(new Vector2((coord.X + 1) * chunkPixelWidth, coord.Y * chunkPixelHeight));
+        line.AddPoint(new Vector2((coord.X + 1) * chunkPixelWidth, (coord.Y + 1) * chunkPixelHeight));
+        line.AddPoint(new Vector2(coord.X * chunkPixelWidth, (coord.Y + 1) * chunkPixelHeight));
+        root.AddChild(line);
+        return root;
+    }
+
     private sealed record ChunkVisualState(
         Node2D TerrainRoot,
         Node2D RaisedFeatureRoot,
         Node2D EntityRoot,
+        Node2D BoundsRoot,
         Dictionary<string, Sprite2D> RaisedSprites)
     {
-        public ChunkVisualState(Node2D terrainRoot, Node2D raisedFeatureRoot, Node2D entityRoot)
-            : this(terrainRoot, raisedFeatureRoot, entityRoot, [])
+        public ChunkVisualState(Node2D terrainRoot, Node2D raisedFeatureRoot, Node2D entityRoot, Node2D boundsRoot)
+            : this(terrainRoot, raisedFeatureRoot, entityRoot, boundsRoot, [])
         {
         }
     }

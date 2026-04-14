@@ -15,6 +15,8 @@ public sealed class InventoryState
 
     public IReadOnlyList<InventorySlot> Slots => _slots;
 
+    public int SlotCount => _slots.Count;
+
     public InventoryState Clone()
     {
         var clone = new InventoryState(_slots.Count);
@@ -197,6 +199,22 @@ public sealed class InventoryState
 
         source.Clear();
         return true;
+    }
+
+    public void SetSlot(int index, ContentId? itemId, int quantity)
+    {
+        if (index < 0 || index >= _slots.Count)
+        {
+            return;
+        }
+
+        if (itemId is null || quantity <= 0)
+        {
+            _slots[index].Clear();
+            return;
+        }
+
+        _slots[index].Set(itemId.Value, quantity);
     }
 
     private sealed class InventorySlotSnapshot(ContentId? itemId, int quantity)
