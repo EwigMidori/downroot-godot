@@ -20,9 +20,12 @@ public partial class AppRoot : Control
     private SettingsController? _settingsPage;
     private Control? _pageHost;
     private bool _previousReturnHeld;
+    private bool _pauseMenuActive;
+    private Control? _currentPage;
 
     public override void _Ready()
     {
+        ProcessMode = Node.ProcessModeEnum.Always;
         _paths = new SavePathResolver();
         _store = new JsonFileStore(_paths);
         _saves = new SaveGameRepository(_paths, _store);
@@ -31,30 +34,30 @@ public partial class AppRoot : Control
         _settingsApplier.Apply(_settings.Load());
         GameInputMapInstaller.Install();
 
-        _pageHost = new Control { AnchorRight = 1, AnchorBottom = 1, Name = "AppPageHost" };
+        _pageHost = new Control { AnchorRight = 1, AnchorBottom = 1, Name = "AppPageHost", ProcessMode = Node.ProcessModeEnum.Always };
         AddChild(_pageHost);
         _session = new SessionController(this, _saves);
 
         _mainMenu = new MainMenuController();
-        _mainMenu.ContinueRequested += ContinueLastSave;
-        _mainMenu.NewGameRequested += () => ShowPage(_newGame!.View);
-        _mainMenu.QuickStartRequested += QuickStart;
-        _mainMenu.LoadGameRequested += ShowLoadGame;
-        _mainMenu.SettingsRequested += () => ShowSettings();
-        _mainMenu.QuitRequested += () => GetTree().Quit();
+        _mainMenu.ContinueRequested += HandleContinueRequested;
+        _mainMenu.NewGameRequested += HandleNewGameRequested;
+        _mainMenu.QuickStartRequested += HandleQuickStartRequested;
+        _mainMenu.LoadGameRequested += HandleLoadGameRequested;
+        _mainMenu.SettingsRequested += HandleSettingsRequested;
+        _mainMenu.QuitRequested += HandleQuitRequested;
 
         _newGame = new NewGameController();
         _newGame.CreateRequested += CreateNewGame;
-        _newGame.BackRequested += ShowMainMenu;
+        _newGame.BackRequested += () => ShowMainMenu();
 
         _loadGame = new LoadGameController();
         _loadGame.LoadRequested += LoadSlot;
         _loadGame.DeleteRequested += DeleteSlot;
-        _loadGame.BackRequested += ShowMainMenu;
+        _loadGame.BackRequested += () => ShowMainMenu();
 
         _settingsPage = new SettingsController();
         _settingsPage.ApplyRequested += ApplySettings;
-        _settingsPage.BackRequested += ShowMainMenu;
+        _settingsPage.BackRequested += HandleSettingsBackRequested;
 
         ShowMainMenu();
     }
@@ -64,7 +67,18 @@ public partial class AppRoot : Control
         var returnHeld = Input.IsKeyPressed(Key.Escape);
         if (returnHeld && !_previousReturnHeld && _session?.GameRoot is not null)
         {
-            ShowMainMenu();
+            if (!_pageHost!.Visible)
+            {
+                ShowPauseMenu();
+            }
+            else if (_pauseMenuActive && ReferenceEquals(_currentPage, _mainMenu?.View))
+            {
+                ResumeSession();
+            }
+            else if (_pauseMenuActive)
+            {
+                ShowPauseMenu();
+            }
         }
 
         _previousReturnHeld = returnHeld;
@@ -72,15 +86,40 @@ public partial class AppRoot : Control
 
     private void ShowMainMenu()
     {
+        GetTree().Paused = false;
+        _pauseMenuActive = false;
         _session!.Stop(saveBeforeClose: true);
         _pageHost!.Visible = true;
         _mainMenu!.Bind(new MainMenuViewData
         {
             CanContinue = _saves!.LoadManifest().LastPlayedSlotId is not null,
             CanLoadGame = _saves.ListSlots().Count > 0,
+            Heading = "Venture Below The Roots",
+            Subheading = "A quiet underground frontier. Start fresh, return to your last run, or tune the game before heading down.",
             VersionLabel = $"v{ProjectSettings.GetSetting("application/config/version", "0.4")}"
         });
         ShowPage(_mainMenu.View);
+    }
+
+    private void ShowPauseMenu()
+    {
+        if (_session?.GameRoot is null)
+        {
+            return;
+        }
+
+        GetTree().Paused = true;
+        _pauseMenuActive = true;
+        _pageHost!.Visible = true;
+        _mainMenu!.BindPauseMenu(_session.CurrentSlotId is not null);
+        ShowPage(_mainMenu.View);
+    }
+
+    private void ResumeSession()
+    {
+        _pauseMenuActive = false;
+        _pageHost!.Visible = false;
+        GetTree().Paused = false;
     }
 
     private void ShowLoadGame()
@@ -190,6 +229,8 @@ public partial class AppRoot : Control
 
     private void StartSession(GameBootstrapRequest request)
     {
+        GetTree().Paused = false;
+        _pauseMenuActive = false;
         _pageHost!.Visible = false;
         _session!.Start(request);
     }
@@ -207,6 +248,77 @@ public partial class AppRoot : Control
         }
 
         _pageHost.AddChild(page);
+        MoveChild(_pageHost, GetChildCount() - 1);
+        _currentPage = page;
+    }
+
+    private void HandleContinueRequested()
+    {
+        if (_pauseMenuActive)
+        {
+            ResumeSession();
+            return;
+        }
+
+        ContinueLastSave();
+    }
+
+    private void HandleNewGameRequested()
+    {
+        if (_pauseMenuActive)
+        {
+            _session?.SaveCurrent();
+            return;
+        }
+
+        ShowPage(_newGame!.View);
+    }
+
+    private void HandleQuickStartRequested()
+    {
+        if (_pauseMenuActive)
+        {
+            return;
+        }
+
+        QuickStart();
+    }
+
+    private void HandleLoadGameRequested()
+    {
+        if (_pauseMenuActive)
+        {
+            ShowMainMenu();
+            return;
+        }
+
+        ShowLoadGame();
+    }
+
+    private void HandleSettingsRequested()
+    {
+        ShowSettings();
+    }
+
+    private void HandleQuitRequested()
+    {
+        if (_pauseMenuActive)
+        {
+            _session?.Stop(saveBeforeClose: true);
+        }
+
+        GetTree().Quit();
+    }
+
+    private void HandleSettingsBackRequested()
+    {
+        if (_pauseMenuActive)
+        {
+            ShowPauseMenu();
+            return;
+        }
+
+        ShowMainMenu();
     }
 
     private static int ResolveSeed(string seedText)
