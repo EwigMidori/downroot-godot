@@ -1,6 +1,8 @@
 using System.Numerics;
 using Downroot.Core.Gameplay;
+using Downroot.Core.Ids;
 using Downroot.Core.Input;
+using Downroot.Core.World;
 
 namespace Downroot.Gameplay.Runtime.Systems;
 
@@ -167,9 +169,23 @@ public sealed class InteractionSystem(
 
     private bool IsPortalEntity(WorldEntityState entity)
     {
-        return entity.Kind == WorldEntityKind.Placeable
+        if (entity.Kind != WorldEntityKind.Placeable || !entity.IsNatural)
+        {
+            return false;
+        }
+
+        var portalDefId = GetPortalDefinitionId(entity.WorldSpaceKind);
+        return portalDefId is not null
+            && entity.DefinitionId == portalDefId.Value
             && runtime.Content.PortalWorldLinks.Any(link =>
                 (link.SourceWorldSpaceKind == entity.WorldSpaceKind && link.SourcePortalChunk == entity.ChunkCoord)
                 || (link.TargetWorldSpaceKind == entity.WorldSpaceKind && link.TargetPortalChunk == entity.ChunkCoord));
+    }
+
+    private ContentId? GetPortalDefinitionId(WorldSpaceKind worldSpaceKind)
+    {
+        return runtime.Content.WorldGenPasses
+            .FirstOrDefault(pass => pass.WorldSpaceKind == worldSpaceKind && pass.PassType == WorldGenPassTypes.PortalSite)
+            ?.TargetId;
     }
 }

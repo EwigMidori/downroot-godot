@@ -7,7 +7,7 @@ public sealed class WorldQueryService(GameRuntime runtime, WorldRuntimeFacade wo
 {
     public WorldEntityState? GetNearestInteractable(float range)
     {
-        return GetActiveEntities()
+        return EnumerateActiveEntities()
             .Where(entity => !entity.Removed && IsInteractionEligible(entity))
             .OrderBy(entity => Vector2.Distance(entity.Position, runtime.Player.Position))
             .FirstOrDefault(entity => Vector2.Distance(entity.Position, runtime.Player.Position) <= range);
@@ -15,7 +15,7 @@ public sealed class WorldQueryService(GameRuntime runtime, WorldRuntimeFacade wo
 
     public WorldEntityState? GetNearestCreature(float range)
     {
-        return GetActiveEntities()
+        return EnumerateActiveEntities()
             .Where(entity => !entity.Removed && entity.Kind == WorldEntityKind.Creature)
             .OrderBy(entity => Vector2.Distance(entity.Position, runtime.Player.Position))
             .FirstOrDefault(entity => Vector2.Distance(entity.Position, runtime.Player.Position) <= range);
@@ -23,7 +23,7 @@ public sealed class WorldQueryService(GameRuntime runtime, WorldRuntimeFacade wo
 
     public WorldEntityState? GetNearestDestructibleEntity(float range)
     {
-        return GetActiveEntities()
+        return EnumerateActiveEntities()
             .Where(entity => !entity.Removed && IsDestructible(entity))
             .OrderBy(entity => Vector2.Distance(entity.Position, runtime.Player.Position))
             .FirstOrDefault(entity => Vector2.Distance(entity.Position, runtime.Player.Position) <= range);
@@ -31,7 +31,7 @@ public sealed class WorldQueryService(GameRuntime runtime, WorldRuntimeFacade wo
 
     public WorldEntityState? FindNearbyStation(CraftingStationKind stationKind, float range)
     {
-        return GetActiveEntities()
+        return EnumerateActiveEntities()
             .Where(entity => !entity.Removed && entity.Kind == WorldEntityKind.Placeable)
             .OrderBy(entity => Vector2.Distance(entity.Position, runtime.Player.Position))
             .FirstOrDefault(entity =>
@@ -47,9 +47,14 @@ public sealed class WorldQueryService(GameRuntime runtime, WorldRuntimeFacade wo
 
     public IReadOnlyList<WorldEntityState> GetActiveEntities()
     {
-        _ = worldFacade.GetActiveWorld();
-        return runtime.WorldState.Entities;
+        return EnumerateActiveEntities()
+            .Where(entity => !entity.Removed)
+            .OrderBy(entity => entity.Position.Y)
+            .ThenBy(entity => entity.Position.X)
+            .ToArray();
     }
+
+    private IEnumerable<WorldEntityState> EnumerateActiveEntities() => worldFacade.GetActiveWorld().EnumerateLoadedEntities();
 
     private bool IsInteractionEligible(WorldEntityState entity)
     {

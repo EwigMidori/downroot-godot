@@ -69,32 +69,33 @@ public sealed partial class WorldRenderer : Node2D
         }
 
         SynchronizeChunks();
+        RefreshDirtyRaisedFeatures();
         SynchronizeEntities();
     }
 
     public void ValidateContentLoads(GameRuntime runtime)
     {
-        foreach (var terrain in runtime.Content.Terrains.All.Take(4))
+        foreach (var terrain in runtime.Content.Terrains.All)
         {
             _ = ResolveTerrainTexture(terrain);
         }
 
-        foreach (var item in runtime.Content.Items.All.Take(4))
+        foreach (var item in runtime.Content.Items.All)
         {
             _ = ResolveItemTexture(item);
         }
 
-        foreach (var raisedFeature in runtime.Content.RaisedFeatures.All.Take(2))
+        foreach (var raisedFeature in runtime.Content.RaisedFeatures.All)
         {
             _ = ResolveRaisedFeatureTexture(raisedFeature, 0);
         }
 
-        foreach (var placeable in runtime.Content.Placeables.All.Take(2))
+        foreach (var placeable in runtime.Content.Placeables.All)
         {
             _ = ResolvePlaceableTexture(placeable, false);
         }
 
-        foreach (var resourceNode in runtime.Content.ResourceNodes.All.Take(2))
+        foreach (var resourceNode in runtime.Content.ResourceNodes.All)
         {
             _ = ResolveResourceNodeTexture(resourceNode);
         }
