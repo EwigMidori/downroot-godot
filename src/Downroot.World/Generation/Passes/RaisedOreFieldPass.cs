@@ -184,14 +184,13 @@ public sealed class RaisedOreFieldPass(ContentId featureId, RaisedOreFieldRuleRe
                 var east = IsOccupied(occupancy, new WorldTileCoord(coord.X + 1, coord.Y));
                 var south = IsOccupied(occupancy, new WorldTileCoord(coord.X, coord.Y + 1));
                 var west = IsOccupied(occupancy, new WorldTileCoord(coord.X - 1, coord.Y));
-                var cardinalCount = Count(north, east, south, west);
-                if (cardinalCount == 0)
+                if (!IsSupportedResolverMask(north, east, south, west))
                 {
                     remove.Add(coord);
                     continue;
                 }
 
-                var diagonalOnly = cardinalCount == 0 && Count(
+                var diagonalOnly = Count(north, east, south, west) == 0 && Count(
                     IsOccupied(occupancy, new WorldTileCoord(coord.X - 1, coord.Y - 1)),
                     IsOccupied(occupancy, new WorldTileCoord(coord.X + 1, coord.Y - 1)),
                     IsOccupied(occupancy, new WorldTileCoord(coord.X + 1, coord.Y + 1)),
@@ -233,6 +232,24 @@ public sealed class RaisedOreFieldPass(ContentId featureId, RaisedOreFieldRuleRe
     private static bool IsOccupied(IDictionary<WorldTileCoord, bool> occupancy, WorldTileCoord coord)
     {
         return occupancy.TryGetValue(coord, out var occupied) && occupied;
+    }
+
+    private static bool IsSupportedResolverMask(bool north, bool east, bool south, bool west)
+    {
+        var cardinalCount = Count(north, east, south, west);
+        if (cardinalCount >= 3)
+        {
+            return true;
+        }
+
+        if (cardinalCount != 2)
+        {
+            return false;
+        }
+
+        // The 13-column atlas supports corners, tees, solid, and inner corners,
+        // but not dead ends or straight corridor masks.
+        return (north || south) && (east || west);
     }
 
     private static int Count(params bool[] values) => values.Count(value => value);
