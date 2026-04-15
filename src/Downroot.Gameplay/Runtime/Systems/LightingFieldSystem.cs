@@ -5,6 +5,8 @@ namespace Downroot.Gameplay.Runtime.Systems;
 public sealed class LightingFieldSystem(GameRuntime runtime, WorldRuntimeFacade worldFacade)
 {
     private const float NightOutdoorBrightness = 0.18f;
+    private const float NightIndoorBrightness = 0.10f;
+    private const float DayIndoorBrightness = 0.18f;
     private const float DayOutdoorBrightness = 1.0f;
     private readonly LightingInputCollector _collector = new(runtime, worldFacade);
 
@@ -22,9 +24,22 @@ public sealed class LightingFieldSystem(GameRuntime runtime, WorldRuntimeFacade 
             return;
         }
 
-        var snapshot = _collector.Collect();
+        LightingInputSnapshot snapshot;
+        if (lighting.IsStructureDirty || lighting.Field is null)
+        {
+            snapshot = _collector.Collect();
+        }
+        else
+        {
+            snapshot = new LightingInputSnapshot(
+                lighting.Bounds,
+                _collector.RefreshEmitterValues(lighting.Emitters),
+                lighting.Occluders,
+                lighting.SkylightMasks);
+        }
+
         var outdoor = ResolveOutdoorSkylightLevel(runtime.WorldState.TimeOfDaySeconds, runtime.BootstrapConfig.DayLengthSeconds);
-        var indoor = outdoor * 0.18f;
+        var indoor = ResolveIndoorSkylightLevel(outdoor);
         var field = new LightingField(
             snapshot.Bounds.MinTileX,
             snapshot.Bounds.MinTileY,
@@ -58,7 +73,7 @@ public sealed class LightingFieldSystem(GameRuntime runtime, WorldRuntimeFacade 
             }
         }
 
-        lighting.UpdateInputs(snapshot.Emitters, snapshot.Occluders, snapshot.SkylightMasks);
+        lighting.UpdateInputs(snapshot.Bounds, snapshot.Emitters, snapshot.Occluders, snapshot.SkylightMasks);
         lighting.ApplyField(field);
     }
 
@@ -91,6 +106,22 @@ public sealed class LightingFieldSystem(GameRuntime runtime, WorldRuntimeFacade 
     private static int QuantizeSkylight(float outdoorLevel)
     {
         return (int)MathF.Round(Math.Clamp(outdoorLevel, 0f, 1f) * 32f);
+    }
+
+    private static float ResolveIndoorSkylightLevel(float outdoorLevel)
+    {
+        if (outdoorLevel <= NightOutdoorBrightness)
+        {
+            return NightIndoorBrightness;
+        }
+
+        if (outdoorLevel >= DayOutdoorBrightness)
+        {
+            return DayIndoorBrightness;
+        }
+
+        var t = (outdoorLevel - NightOutdoorBrightness) / (DayOutdoorBrightness - NightOutdoorBrightness);
+        return Lerp(NightIndoorBrightness, DayIndoorBrightness, t);
     }
 
     private static float Lerp(float from, float to, float t)

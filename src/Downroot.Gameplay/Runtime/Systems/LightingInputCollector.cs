@@ -38,6 +38,38 @@ public sealed class LightingInputCollector(GameRuntime runtime, WorldRuntimeFaca
             skylightMasks);
     }
 
+    public IReadOnlyList<RuntimeLightEmitter> RefreshEmitterValues(IReadOnlyList<RuntimeLightEmitter> emitters)
+    {
+        if (emitters.Count == 0)
+        {
+            return emitters;
+        }
+
+        var world = worldFacade.GetActiveWorld();
+        var refreshed = new RuntimeLightEmitter[emitters.Count];
+        for (var index = 0; index < emitters.Count; index++)
+        {
+            var emitter = emitters[index];
+            if (!world.TryGetEntity(emitter.EntityId, out var entity)
+                || entity.Removed
+                || !runtime.Content.Placeables.TryGet(entity.DefinitionId, out var placeableDef)
+                || placeableDef?.LightEmitter is not { } lightEmitter)
+            {
+                refreshed[index] = emitter with { IsEnabled = false };
+                continue;
+            }
+
+            var tile = worldFacade.GetWorldTile(entity.Position);
+            refreshed[index] = emitter with
+            {
+                WorldTile = tile,
+                IsEnabled = ResolveEmitterEnabled(entity, placeableDef, lightEmitter)
+            };
+        }
+
+        return refreshed;
+    }
+
     private void CollectEmitter(
         WorldEntityState entity,
         PlaceableDef placeableDef,
@@ -121,8 +153,6 @@ public sealed class LightingInputCollector(GameRuntime runtime, WorldRuntimeFaca
             ((maxChunkY - minChunkY) + 1) * chunkHeight);
     }
 }
-
-public readonly record struct LightingFieldBounds(int MinTileX, int MinTileY, int Width, int Height);
 
 public sealed record LightingInputSnapshot(
     LightingFieldBounds Bounds,

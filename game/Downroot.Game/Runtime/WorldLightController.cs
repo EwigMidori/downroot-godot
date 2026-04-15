@@ -125,8 +125,8 @@ public sealed partial class WorldLightController : Node2D
     {
         var t = Mathf.Clamp(outdoorSkylight, 0f, 1f);
         return new Color(
-            Mathf.Lerp(0.78f, 1f, t),
-            Mathf.Lerp(0.82f, 1f, t),
+            Mathf.Lerp(0.92f, 1f, t),
+            Mathf.Lerp(0.95f, 1f, t),
             Mathf.Lerp(0.92f, 1f, t),
             1f);
     }

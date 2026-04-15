@@ -5,6 +5,7 @@ namespace Downroot.Gameplay.Runtime;
 public sealed class LightingRuntimeState
 {
     public LightingField? Field { get; private set; }
+    public LightingFieldBounds Bounds { get; private set; } = new(0, 0, 1, 1);
     public IReadOnlyList<RuntimeLightEmitter> Emitters { get; private set; } = [];
     public IReadOnlyList<RuntimeLightOccluder> Occluders { get; private set; } = [];
     public IReadOnlyList<RuntimeSkylightMask> SkylightMasks { get; private set; } = [];
@@ -52,10 +53,12 @@ public sealed class LightingRuntimeState
     }
 
     public void UpdateInputs(
+        LightingFieldBounds bounds,
         IReadOnlyList<RuntimeLightEmitter> emitters,
         IReadOnlyList<RuntimeLightOccluder> occluders,
         IReadOnlyList<RuntimeSkylightMask> skylightMasks)
     {
+        Bounds = bounds;
         Emitters = emitters;
         Occluders = occluders;
         SkylightMasks = skylightMasks;
