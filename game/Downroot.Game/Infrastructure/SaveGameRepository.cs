@@ -48,6 +48,7 @@ public sealed class SaveGameRepository
             SlotId = save.SlotId,
             DisplayName = save.DisplayName,
             WorldSeed = save.WorldSeed,
+            EnabledPackIds = save.Mods.EnabledPackIds.ToArray(),
             LastWriteUtc = DateTimeOffset.UtcNow,
             CurrentWorldSpace = save.ActiveWorldSpaceKind,
             PlayerHealth = save.Player.Health,

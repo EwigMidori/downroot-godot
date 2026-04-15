@@ -13,11 +13,13 @@ public partial class AppRoot : Control
     private JsonFileStore? _store;
     private SaveGameRepository? _saves;
     private SettingsRepository? _settings;
+    private ModSettingsRepository? _mods;
     private SettingsApplier? _settingsApplier;
     private SessionController? _session;
     private MainMenuController? _mainMenu;
     private NewGameController? _newGame;
     private LoadGameController? _loadGame;
+    private ModManagementController? _modManagement;
     private SettingsController? _settingsPage;
     private CanvasLayer? _pageLayer;
     private Control? _pageHost;
@@ -31,6 +33,7 @@ public partial class AppRoot : Control
         _store = new JsonFileStore(_paths);
         _saves = new SaveGameRepository(_paths, _store);
         _settings = new SettingsRepository(_paths, _store);
+        _mods = new ModSettingsRepository(_paths, _store);
         _settingsApplier = new SettingsApplier();
         _settingsApplier.Apply(_settings.Load());
         GameInputMapInstaller.Install();
@@ -58,6 +61,7 @@ public partial class AppRoot : Control
         _mainMenu.NewGameRequested += HandleNewGameRequested;
         _mainMenu.QuickStartRequested += HandleQuickStartRequested;
         _mainMenu.LoadGameRequested += HandleLoadGameRequested;
+        _mainMenu.ModManagementRequested += HandleModManagementRequested;
         _mainMenu.SettingsRequested += HandleSettingsRequested;
         _mainMenu.QuitRequested += HandleQuitRequested;
 
@@ -69,6 +73,9 @@ public partial class AppRoot : Control
         _loadGame.LoadRequested += LoadSlot;
         _loadGame.DeleteRequested += DeleteSlot;
         _loadGame.BackRequested += () => ShowMainMenu();
+
+        _modManagement = new ModManagementController(_mods);
+        _modManagement.BackRequested += () => ShowMainMenu();
 
         _settingsPage = new SettingsController();
         _settingsPage.ApplyRequested += ApplySettings;
@@ -162,12 +169,35 @@ public partial class AppRoot : Control
             SlotId = slot.SlotId,
             DisplayName = slot.DisplayName,
             WorldSeed = slot.WorldSeed,
+            EnabledPackIds = slot.EnabledPackIds,
             CurrentWorldSpace = slot.CurrentWorldSpace,
             PlayerHealth = slot.PlayerHealth,
             PlayerHunger = slot.PlayerHunger,
             LastWriteUtc = slot.LastWriteUtc
         }).ToArray());
         ShowPage(_loadGame.View);
+    }
+
+    private void ShowLoadGame(string? errorMessage)
+    {
+        _loadGame!.Bind(_saves!.ListSlots().Select(slot => new SaveSlotViewData
+        {
+            SlotId = slot.SlotId,
+            DisplayName = slot.DisplayName,
+            WorldSeed = slot.WorldSeed,
+            EnabledPackIds = slot.EnabledPackIds,
+            CurrentWorldSpace = slot.CurrentWorldSpace,
+            PlayerHealth = slot.PlayerHealth,
+            PlayerHunger = slot.PlayerHunger,
+            LastWriteUtc = slot.LastWriteUtc
+        }).ToArray(), errorMessage);
+        ShowPage(_loadGame.View);
+    }
+
+    private void ShowModManagement()
+    {
+        _modManagement!.Bind();
+        ShowPage(_modManagement.View);
     }
 
     private void ShowSettings()
@@ -205,6 +235,7 @@ public partial class AppRoot : Control
                 SaveSlotId = slotId,
                 DisplayName = displayName,
                 WorldSeed = Random.Shared.Next(),
+                EnabledPackIds = _mods!.Load().EnabledPackIds,
                 IsNewGame = true
             }
         });
@@ -221,6 +252,7 @@ public partial class AppRoot : Control
                 SaveSlotId = slotId,
                 DisplayName = resolvedName,
                 WorldSeed = ResolveSeed(seedText),
+                EnabledPackIds = _mods!.Load().EnabledPackIds,
                 IsNewGame = true
             }
         });
@@ -242,6 +274,7 @@ public partial class AppRoot : Control
                 SaveSlotId = save.SlotId,
                 DisplayName = save.DisplayName,
                 WorldSeed = save.WorldSeed,
+                EnabledPackIds = save.Mods.EnabledPackIds,
                 IsNewGame = false
             },
             ExistingSave = save
@@ -265,7 +298,23 @@ public partial class AppRoot : Control
         GetTree().Paused = false;
         _pauseMenuActive = false;
         _pageHost!.Visible = false;
-        _session!.Start(request);
+        if (!_session!.Start(request))
+        {
+            _pageHost.Visible = true;
+            var errorMessage = request.ExistingSave is null
+                ? _session.LastStartError
+                : FormatLoadFailure(request.ExistingSave, _session.LastStartError);
+            ShowLoadGame(errorMessage);
+        }
+    }
+
+    private static string FormatLoadFailure(SaveGameData save, string? reason)
+    {
+        var requiredMods = save.Mods.EnabledPackIds.Count == 0
+            ? "basegame"
+            : string.Join(", ", save.Mods.EnabledPackIds);
+        var detail = string.IsNullOrWhiteSpace(reason) ? "Failed to resolve the save's mod set." : reason;
+        return $"{detail} Required mods: {requiredMods}. Enable the required built-in mods in Mod Management before loading this save.";
     }
 
     private void ShowPage(Control page)
@@ -325,6 +374,16 @@ public partial class AppRoot : Control
         }
 
         ShowLoadGame();
+    }
+
+    private void HandleModManagementRequested()
+    {
+        if (_pauseMenuActive)
+        {
+            return;
+        }
+
+        ShowModManagement();
     }
 
     private void HandleSettingsRequested()

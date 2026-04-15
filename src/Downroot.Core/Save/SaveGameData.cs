@@ -5,6 +5,7 @@ public sealed class SaveGameData
     public string SlotId { get; set; } = string.Empty;
     public string DisplayName { get; set; } = string.Empty;
     public int WorldSeed { get; set; }
+    public ModSelectionData Mods { get; set; } = new();
     public string ActiveWorldSpaceKind { get; set; } = string.Empty;
     public SavedPlayerData Player { get; set; } = new();
     public float TimeOfDaySeconds { get; set; }

@@ -5,6 +5,7 @@ namespace Downroot.Game.Infrastructure;
 public sealed class SavePathResolver
 {
     public string GetSettingsPath() => "user://settings.json";
+    public string GetModSettingsPath() => "user://mods.json";
 
     public string GetManifestPath() => "user://saves/manifest.json";
 

@@ -12,6 +12,7 @@ public sealed class LoadGameController
     private readonly Control _root;
     private readonly ItemList _slotList;
     private readonly RichTextLabel _details;
+    private readonly RichTextLabel _errorLabel;
     private readonly Button _loadButton;
     private readonly Button _deleteButton;
     private IReadOnlyList<SaveSlotViewData> _slots = [];
@@ -52,6 +53,21 @@ public sealed class LoadGameController
         };
         body.AddChild(_details);
 
+        _errorLabel = new RichTextLabel
+        {
+            AnchorLeft = 0.5f,
+            AnchorTop = 1,
+            AnchorRight = 0.5f,
+            AnchorBottom = 1,
+            OffsetLeft = -360,
+            OffsetTop = -96,
+            OffsetRight = 360,
+            OffsetBottom = -66,
+            BbcodeEnabled = true,
+            FitContent = true
+        };
+        _root.AddChild(_errorLabel);
+
         var buttons = new HBoxContainer
         {
             AnchorLeft = 0.5f,
@@ -91,7 +107,7 @@ public sealed class LoadGameController
 
     public Control View => _root;
 
-    public void Bind(IReadOnlyList<SaveSlotViewData> slots)
+    public void Bind(IReadOnlyList<SaveSlotViewData> slots, string? errorMessage = null)
     {
         _slots = slots;
         _slotList.Clear();
@@ -105,6 +121,9 @@ public sealed class LoadGameController
             _slotList.Select(0);
         }
 
+        _errorLabel.Text = string.IsNullOrWhiteSpace(errorMessage)
+            ? string.Empty
+            : $"[color=#ff8e8e]{errorMessage}[/color]";
         RefreshDetails();
     }
 
@@ -124,6 +143,7 @@ public sealed class LoadGameController
             $"[b]{slot.DisplayName}[/b]\n" +
             $"Seed: {slot.WorldSeed}\n" +
             $"Last Save: {slot.LastWriteUtc.LocalDateTime:yyyy-MM-dd HH:mm:ss}\n" +
+            $"Enabled Mods: {(slot.EnabledPackIds.Count == 0 ? "basegame" : string.Join(", ", slot.EnabledPackIds))}\n" +
             $"Health: {slot.PlayerHealth}\n" +
             $"Hunger: {slot.PlayerHunger}\n" +
             $"World: {slot.CurrentWorldSpace}";

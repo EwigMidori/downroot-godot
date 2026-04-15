@@ -13,7 +13,10 @@ public sealed class WorldRuntimeFacade(GameRuntime runtime)
         get
         {
             yield return runtime.Overworld;
-            yield return runtime.DimShardPocket;
+            if (runtime.DimShardPocket is not null)
+            {
+                yield return runtime.DimShardPocket;
+            }
         }
     }
 

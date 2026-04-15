@@ -17,6 +17,7 @@ public sealed class SessionController
     private GameRoot? _gameRoot;
     private GameBootstrapRequest? _currentRequest;
     private DebugRuntimeState? _debugState;
+    private string? _lastStartError;
 
     public SessionController(Node host, SaveGameRepository saveRepository)
     {
@@ -29,25 +30,39 @@ public sealed class SessionController
     public DebugRuntimeState? DebugState => _debugState;
     public string? CurrentSlotId => Runtime?.SaveSlotId;
     public string? CurrentDisplayName => Runtime?.SaveDisplayName;
+    public string? LastStartError => _lastStartError;
 
-    public void Start(GameBootstrapRequest request)
+    public bool Start(GameBootstrapRequest request)
     {
         Stop(saveBeforeClose: false);
         _currentRequest = request;
-        var runtime = _bootstrapper.Bootstrap(request);
-        _saveRepository.SetLastPlayedSlot(request.StartOptions.SaveSlotId);
-        _debugState = new DebugRuntimeState();
-        _debugState.Bind(runtime, request.StartOptions.DisplayName);
-        _gameRoot = new GameRoot
+        try
         {
-            ProcessMode = Node.ProcessModeEnum.Pausable
-        };
-        _gameRoot.Configure(runtime, _debugState, SaveCurrent, ReloadCurrent);
-        _host.AddChild(_gameRoot);
+            var runtime = _bootstrapper.Bootstrap(request);
+            _saveRepository.SetLastPlayedSlot(request.StartOptions.SaveSlotId);
+            _debugState = new DebugRuntimeState();
+            _debugState.Bind(runtime, request.StartOptions.DisplayName);
+            _gameRoot = new GameRoot
+            {
+                ProcessMode = Node.ProcessModeEnum.Pausable
+            };
+            _gameRoot.Configure(runtime, _debugState, SaveCurrent, ReloadCurrent);
+            _host.AddChild(_gameRoot);
+            _lastStartError = null;
 
-        if (request.StartOptions.IsNewGame)
+            if (request.StartOptions.IsNewGame)
+            {
+                SaveCurrent();
+            }
+
+            return true;
+        }
+        catch (Exception ex)
         {
-            SaveCurrent();
+            _lastStartError = ex.Message;
+            _debugState = null;
+            _gameRoot = null;
+            return false;
         }
     }
 
@@ -98,6 +113,7 @@ public sealed class SessionController
                 SaveSlotId = existingSave.SlotId,
                 DisplayName = existingSave.DisplayName,
                 WorldSeed = existingSave.WorldSeed,
+                EnabledPackIds = existingSave.Mods.EnabledPackIds,
                 IsNewGame = false
             },
             ExistingSave = existingSave

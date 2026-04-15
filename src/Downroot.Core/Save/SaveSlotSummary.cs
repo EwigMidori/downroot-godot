@@ -5,6 +5,7 @@ public sealed class SaveSlotSummary
     public string SlotId { get; set; } = string.Empty;
     public string DisplayName { get; set; } = string.Empty;
     public int WorldSeed { get; set; }
+    public IReadOnlyList<string> EnabledPackIds { get; set; } = [];
     public DateTimeOffset LastWriteUtc { get; set; }
     public string CurrentWorldSpace { get; set; } = string.Empty;
     public int PlayerHealth { get; set; }

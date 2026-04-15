@@ -29,7 +29,7 @@ public sealed class WorldState
     }
 
     public required LoadedWorldState Overworld { get; init; }
-    public required LoadedWorldState DimShardPocket { get; init; }
+    public LoadedWorldState? DimShardPocket { get; init; }
     public WorldTravelState Travel { get; } = new();
     public float TimeOfDaySeconds { get; set; }
     public float TotalElapsedSeconds { get; set; }
@@ -55,7 +55,7 @@ public sealed class WorldState
     {
         return ActiveWorldSpaceKind == WorldSpaceKind.Overworld
             ? Overworld
-            : DimShardPocket;
+            : DimShardPocket ?? throw new InvalidOperationException("DimShardPocket is not loaded.");
     }
 
     public void RefreshEntityProjection()
@@ -131,7 +131,7 @@ public sealed class WorldState
     public bool RemoveDeleted()
     {
         var deleted = false;
-        foreach (var world in new[] { Overworld, DimShardPocket })
+        foreach (var world in EnumerateWorlds())
         {
             foreach (var chunk in world.LoadedChunks.Values)
             {
@@ -154,5 +154,14 @@ public sealed class WorldState
         }
 
         return deleted;
+    }
+
+    private IEnumerable<LoadedWorldState> EnumerateWorlds()
+    {
+        yield return Overworld;
+        if (DimShardPocket is not null)
+        {
+            yield return DimShardPocket;
+        }
     }
 }

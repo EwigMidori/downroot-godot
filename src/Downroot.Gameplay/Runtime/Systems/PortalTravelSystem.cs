@@ -52,7 +52,9 @@ public sealed class PortalTravelSystem(
             ? link.SourcePortalChunk
             : link.TargetPortalChunk;
 
-        if (targetWorld == WorldSpaceKind.DimShardPocket && !runtime.DimShardPocket.LoadedChunks.ContainsKey(targetPortalChunk))
+        if (targetWorld == WorldSpaceKind.DimShardPocket
+            && runtime.DimShardPocket is not null
+            && !runtime.DimShardPocket.LoadedChunks.ContainsKey(targetPortalChunk))
         {
             worldStreamingSystem.UpdateLoadedChunksForWorld(
                 runtime.DimShardPocket,
@@ -85,6 +87,11 @@ public sealed class PortalTravelSystem(
         var activeWorld = worldFacade.GetActiveWorld();
         if (runtime.ActiveWorldSpaceKind == WorldSpaceKind.DimShardPocket)
         {
+            if (runtime.DimShardPocket is null)
+            {
+                throw new InvalidOperationException("DimShardPocket travel requires the portal mod runtime.");
+            }
+
             if (ReferenceEquals(activeWorld, runtime.Overworld)
                 || activeWorld.Model.WorldSpaceKind != WorldSpaceKind.DimShardPocket
                 || activeWorld.Model.StableId == "overworld"

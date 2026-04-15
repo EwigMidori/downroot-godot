@@ -9,6 +9,7 @@ public sealed class MainMenuController
     public event Action? NewGameRequested;
     public event Action? QuickStartRequested;
     public event Action? LoadGameRequested;
+    public event Action? ModManagementRequested;
     public event Action? SettingsRequested;
     public event Action? QuitRequested;
 
@@ -21,6 +22,7 @@ public sealed class MainMenuController
     private readonly Button _newGameButton;
     private readonly Button _quickStartButton;
     private readonly Button _loadGameButton;
+    private readonly Button _modManagementButton;
     private readonly Button _settingsButton;
     private readonly Button _quitButton;
     private readonly Label _versionLabel;
@@ -81,6 +83,7 @@ public sealed class MainMenuController
         _newGameButton = CreateButton("New Game", () => NewGameRequested?.Invoke());
         _quickStartButton = CreateButton("Quick Start", () => QuickStartRequested?.Invoke());
         _loadGameButton = CreateButton("Load Game", () => LoadGameRequested?.Invoke());
+        _modManagementButton = CreateButton("Mod Management", () => ModManagementRequested?.Invoke());
         _settingsButton = CreateButton("Settings", () => SettingsRequested?.Invoke());
         _quitButton = CreateButton("Quit", () => QuitRequested?.Invoke());
 
@@ -88,6 +91,7 @@ public sealed class MainMenuController
         _menuColumn.AddChild(_newGameButton);
         _menuColumn.AddChild(_quickStartButton);
         _menuColumn.AddChild(_loadGameButton);
+        _menuColumn.AddChild(_modManagementButton);
         _menuColumn.AddChild(_settingsButton);
         _menuColumn.AddChild(_quitButton);
 
@@ -122,6 +126,7 @@ public sealed class MainMenuController
         ConfigureButton(_newGameButton, "New Game", true);
         ConfigureButton(_quickStartButton, "Quick Start", true);
         ConfigureButton(_loadGameButton, "Load Game", true);
+        ConfigureButton(_modManagementButton, "Mod Management", true);
         ConfigureButton(_settingsButton, "Settings", true);
         ConfigureButton(_quitButton, "Quit", true);
         _versionLabel.Visible = true;
@@ -137,11 +142,13 @@ public sealed class MainMenuController
         ConfigureButton(_newGameButton, "Save Game", true);
         ConfigureButton(_quickStartButton, string.Empty, false);
         ConfigureButton(_loadGameButton, "Return to Main Menu", true);
+        ConfigureButton(_modManagementButton, string.Empty, false);
         ConfigureButton(_settingsButton, "Settings", true);
         ConfigureButton(_quitButton, "Quit Desktop", true);
         _continueButton.Disabled = false;
         _newGameButton.Disabled = !canSaveGame;
         _loadGameButton.Disabled = false;
+        _modManagementButton.Disabled = false;
         _settingsButton.Disabled = false;
         _quitButton.Disabled = false;
         _versionLabel.Visible = false;

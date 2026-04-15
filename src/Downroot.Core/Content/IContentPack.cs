@@ -2,6 +2,7 @@ namespace Downroot.Core.Content;
 
 public interface IContentPack
 {
-    string PackId { get; }
+    ContentPackManifest Manifest { get; }
+    string PackId => Manifest.PackId;
     void Register(IContentRegistrar registrar);
 }

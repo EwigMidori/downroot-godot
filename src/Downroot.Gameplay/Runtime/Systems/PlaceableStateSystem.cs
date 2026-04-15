@@ -7,7 +7,10 @@ public sealed class PlaceableStateSystem(GameRuntime runtime, WorldRuntimeFacade
     public void Update(float deltaSeconds)
     {
         SyncWorld(runtime.Overworld);
-        SyncWorld(runtime.DimShardPocket);
+        if (runtime.DimShardPocket is not null)
+        {
+            SyncWorld(runtime.DimShardPocket);
+        }
     }
 
     private void SyncWorld(LoadedWorldState world)
