@@ -40,13 +40,16 @@ public sealed class LightingFieldSystem(GameRuntime runtime, WorldRuntimeFacade 
 
         var outdoor = ResolveOutdoorSkylightLevel(runtime.WorldState.TimeOfDaySeconds, runtime.BootstrapConfig.DayLengthSeconds);
         var indoor = ResolveIndoorSkylightLevel(outdoor);
-        var field = new LightingField(
-            snapshot.Bounds.MinTileX,
-            snapshot.Bounds.MinTileY,
-            snapshot.Bounds.Width,
-            snapshot.Bounds.Height,
-            outdoor,
-            indoor);
+        var dirtyBounds = ResolveDirtyBounds(lighting, snapshot);
+        var field = lighting.IsStructureDirty || lighting.Field is null
+            ? new LightingField(
+                snapshot.Bounds.MinTileX,
+                snapshot.Bounds.MinTileY,
+                snapshot.Bounds.Width,
+                snapshot.Bounds.Height,
+                outdoor,
+                indoor)
+            : lighting.Field.CloneWithLevels(outdoor, indoor);
 
         var skylightMaskTiles = snapshot.SkylightMasks
             .Where(mask => mask.BlocksSkylight)
@@ -60,12 +63,17 @@ public sealed class LightingFieldSystem(GameRuntime runtime, WorldRuntimeFacade 
 
         foreach (var emitter in snapshot.Emitters.Where(emitter => emitter.IsEnabled && emitter.RadiusTiles > 0f && emitter.Intensity > 0f))
         {
-            WriteEmitterLight(localLightLevels, emitter, occluderTiles);
+            if (!EmitterAffectsBounds(emitter, dirtyBounds))
+            {
+                continue;
+            }
+
+            WriteEmitterLight(localLightLevels, emitter, occluderTiles, dirtyBounds);
         }
 
-        for (var y = snapshot.Bounds.MinTileY; y < snapshot.Bounds.MinTileY + snapshot.Bounds.Height; y++)
+        for (var y = dirtyBounds.MinTileY; y < dirtyBounds.MinTileY + dirtyBounds.Height; y++)
         {
-            for (var x = snapshot.Bounds.MinTileX; x < snapshot.Bounds.MinTileX + snapshot.Bounds.Width; x++)
+            for (var x = dirtyBounds.MinTileX; x < dirtyBounds.MinTileX + dirtyBounds.Width; x++)
             {
                 var tile = new WorldTileCoord(x, y);
                 var skylightLevel = skylightMaskTiles.Contains(tile) ? indoor : outdoor;
@@ -75,6 +83,22 @@ public sealed class LightingFieldSystem(GameRuntime runtime, WorldRuntimeFacade 
 
         lighting.UpdateInputs(snapshot.Bounds, snapshot.Emitters, snapshot.Occluders, snapshot.SkylightMasks);
         lighting.ApplyField(field);
+    }
+
+    private static LightingFieldBounds ResolveDirtyBounds(LightingRuntimeState lighting, LightingInputSnapshot snapshot)
+    {
+        if (lighting.IsStructureDirty || lighting.Field is null)
+        {
+            return snapshot.Bounds;
+        }
+
+        if (lighting.ValueDirtyBounds is not { } dirty)
+        {
+            return snapshot.Bounds;
+        }
+
+        var clamped = dirty.ClampTo(snapshot.Bounds);
+        return clamped.IsEmpty ? snapshot.Bounds : clamped;
     }
 
     public static float ResolveOutdoorSkylightLevel(float timeOfDaySeconds, float dayLengthSeconds)
@@ -132,7 +156,8 @@ public sealed class LightingFieldSystem(GameRuntime runtime, WorldRuntimeFacade 
     private static void WriteEmitterLight(
         Dictionary<WorldTileCoord, float> localLightLevels,
         RuntimeLightEmitter emitter,
-        HashSet<WorldTileCoord> occluderTiles)
+        HashSet<WorldTileCoord> occluderTiles,
+        LightingFieldBounds dirtyBounds)
     {
         var radius = Math.Max(1, (int)MathF.Ceiling(emitter.RadiusTiles));
         for (var dy = -radius; dy <= radius; dy++)
@@ -140,6 +165,11 @@ public sealed class LightingFieldSystem(GameRuntime runtime, WorldRuntimeFacade 
             for (var dx = -radius; dx <= radius; dx++)
             {
                 var tile = new WorldTileCoord(emitter.WorldTile.X + dx, emitter.WorldTile.Y + dy);
+                if (!dirtyBounds.Contains(tile))
+                {
+                    continue;
+                }
+
                 var distance = MathF.Sqrt((dx * dx) + (dy * dy));
                 if (distance > emitter.RadiusTiles)
                 {
@@ -161,6 +191,13 @@ public sealed class LightingFieldSystem(GameRuntime runtime, WorldRuntimeFacade 
                 localLightLevels[tile] = Math.Max(localLightLevels.GetValueOrDefault(tile), level);
             }
         }
+    }
+
+    private static bool EmitterAffectsBounds(RuntimeLightEmitter emitter, LightingFieldBounds bounds)
+    {
+        var radius = Math.Max(1, (int)MathF.Ceiling(emitter.RadiusTiles));
+        var emitterBounds = LightingFieldBounds.FromTile(emitter.WorldTile).Expand(radius);
+        return emitterBounds.Intersects(bounds);
     }
 
     private static bool HasLineOfSight(WorldTileCoord source, WorldTileCoord target, HashSet<WorldTileCoord> occluderTiles)

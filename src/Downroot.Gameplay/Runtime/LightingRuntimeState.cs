@@ -16,6 +16,7 @@ public sealed class LightingRuntimeState
     public bool IsValueDirty { get; private set; } = true;
     public int SkylightBucket { get; private set; } = -1;
     public WorldSpaceKind ActiveWorldSpaceKind { get; private set; } = WorldSpaceKind.Overworld;
+    public LightingFieldBounds? ValueDirtyBounds { get; private set; }
 
     public void SetActiveWorld(WorldSpaceKind worldSpaceKind)
     {
@@ -33,12 +34,22 @@ public sealed class LightingRuntimeState
         StructureVersion++;
         IsStructureDirty = true;
         IsValueDirty = true;
+        ValueDirtyBounds = null;
     }
 
-    public void MarkValueDirty()
+    public void MarkValueDirty(LightingFieldBounds? dirtyBounds = null)
     {
         ValueVersion++;
         IsValueDirty = true;
+        if (dirtyBounds is null)
+        {
+            ValueDirtyBounds = null;
+            return;
+        }
+
+        ValueDirtyBounds = ValueDirtyBounds is { } existing
+            ? LightingFieldBounds.Union(existing, dirtyBounds.Value)
+            : dirtyBounds.Value;
     }
 
     public void UpdateSkylightBucket(int bucket)
@@ -49,7 +60,7 @@ public sealed class LightingRuntimeState
         }
 
         SkylightBucket = bucket;
-        MarkValueDirty();
+        MarkValueDirty(Bounds);
     }
 
     public void UpdateInputs(
@@ -70,5 +81,6 @@ public sealed class LightingRuntimeState
         FieldVersion++;
         IsStructureDirty = false;
         IsValueDirty = false;
+        ValueDirtyBounds = null;
     }
 }

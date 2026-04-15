@@ -24,6 +24,13 @@ public sealed class LightingField
     public float OutdoorSkylightLevel { get; }
     public float IndoorSkylightLevel { get; }
 
+    public LightingField CloneWithLevels(float outdoorSkylightLevel, float indoorSkylightLevel)
+    {
+        var clone = new LightingField(MinTileX, MinTileY, Width, Height, outdoorSkylightLevel, indoorSkylightLevel);
+        Array.Copy(_cells, clone._cells, _cells.Length);
+        return clone;
+    }
+
     public void SetCell(WorldTileCoord tile, float localLightLevel, float skylightLevel)
     {
         if (!TryGetIndex(tile, out var index))

@@ -86,9 +86,9 @@ public sealed class WorldState
         Lighting.MarkStructureDirty();
     }
 
-    public void NotifyLightingValueChanged()
+    public void NotifyLightingValueChanged(LightingFieldBounds? dirtyBounds = null)
     {
-        Lighting.MarkValueDirty();
+        Lighting.MarkValueDirty(dirtyBounds);
     }
 
     public bool EnsureEntityProjectionCurrent()

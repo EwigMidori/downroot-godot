@@ -104,7 +104,7 @@ public sealed class WorldRuntimeFacade(GameRuntime runtime)
             if (TryGetPlaceableDef(entity, out var placeableDef)
                 && (placeableDef.LightEmitter is not null || placeableDef.LightOccluder is not null || placeableDef.SkylightMask is not null))
             {
-                runtime.WorldState.NotifyLightingValueChanged();
+                runtime.WorldState.NotifyLightingValueChanged(ResolveLightingDirtyBounds(entity, placeableDef));
             }
         }
     }
@@ -113,7 +113,7 @@ public sealed class WorldRuntimeFacade(GameRuntime runtime)
     {
         if (entity.WorldSpaceKind == runtime.ActiveWorldSpaceKind)
         {
-            runtime.WorldState.NotifyLightingValueChanged();
+            runtime.WorldState.NotifyLightingValueChanged(ResolveLightingDirtyBounds(entity));
         }
     }
 
@@ -164,6 +164,35 @@ public sealed class WorldRuntimeFacade(GameRuntime runtime)
 
         placeableDef = null!;
         return false;
+    }
+
+    private LightingFieldBounds ResolveLightingDirtyBounds(WorldEntityState entity)
+    {
+        return TryGetPlaceableDef(entity, out var placeableDef)
+            ? ResolveLightingDirtyBounds(entity, placeableDef)
+            : LightingFieldBounds.FromTile(GetWorldTile(entity.Position));
+    }
+
+    private LightingFieldBounds ResolveLightingDirtyBounds(WorldEntityState entity, PlaceableDef placeableDef)
+    {
+        var tile = GetWorldTile(entity.Position);
+        var radius = 0;
+        if (placeableDef.LightEmitter is { } emitter)
+        {
+            radius = Math.Max(radius, (int)MathF.Ceiling(emitter.RadiusTiles));
+        }
+
+        if (placeableDef.LightOccluder is { BlocksLight: true })
+        {
+            radius = Math.Max(radius, 1);
+        }
+
+        if (placeableDef.SkylightMask is { BlocksSkylight: true })
+        {
+            radius = Math.Max(radius, 1);
+        }
+
+        return LightingFieldBounds.FromTile(tile).Expand(radius);
     }
 
     public void ClearPrimaryBedAssignments()
