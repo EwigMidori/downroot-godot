@@ -19,3 +19,6 @@ Thumbs.db
 
 # Local scratch
 .tmp/
+!.tmp/
+.tmp/*
+!.tmp/generate_final_phase_assets.py
