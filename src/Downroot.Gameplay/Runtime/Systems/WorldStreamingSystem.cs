@@ -90,6 +90,7 @@ public sealed class WorldStreamingSystem(GameRuntime runtime, WorldRuntimeFacade
         if (changed && world.WorldSpaceKind == runtime.ActiveWorldSpaceKind)
         {
             worldFacade.MarkEntityProjectionDirty();
+            worldFacade.NotifyLightingStructureChanged(world.WorldSpaceKind);
         }
 
         return changed;

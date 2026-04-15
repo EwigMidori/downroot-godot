@@ -155,7 +155,7 @@ public sealed class PlaceableInteractionResolver(
         {
             state.IsLit = false;
             worldFacade.NotifyEntityStateChanged(entity);
-            worldFacade.NotifyLightStateChanged(entity);
+            worldFacade.NotifyLightingValueChanged(entity);
             runtime.WorldState.SetStatusEvent(new StatusEventState(StatusEventKind.LightBurnedOut, entity.DefinitionId), 1.5f);
             return;
         }
@@ -163,7 +163,7 @@ public sealed class PlaceableInteractionResolver(
         state.IsLit = !state.IsLit;
         state.FuelLastUpdatedTotalSeconds = runtime.WorldState.TotalElapsedSeconds;
         worldFacade.NotifyEntityStateChanged(entity);
-        worldFacade.NotifyLightStateChanged(entity);
+        worldFacade.NotifyLightingValueChanged(entity);
         runtime.WorldState.SetStatusEvent(
             new StatusEventState(state.IsLit ? StatusEventKind.LightLit : StatusEventKind.LightExtinguished, entity.DefinitionId),
             1.2f);

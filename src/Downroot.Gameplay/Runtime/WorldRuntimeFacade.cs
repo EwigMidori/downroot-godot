@@ -66,6 +66,7 @@ public sealed class WorldRuntimeFacade(GameRuntime runtime)
         if (worldSpaceKind == runtime.ActiveWorldSpaceKind)
         {
             runtime.WorldState.MarkEntityProjectionDirty();
+            runtime.WorldState.NotifyLightingStructureChanged();
         }
     }
 
@@ -100,14 +101,27 @@ public sealed class WorldRuntimeFacade(GameRuntime runtime)
         if (entity.WorldSpaceKind == runtime.ActiveWorldSpaceKind)
         {
             runtime.WorldState.NotifyEntityStateChanged();
+            if (TryGetPlaceableDef(entity, out var placeableDef)
+                && (placeableDef.LightEmitter is not null || placeableDef.LightOccluder is not null || placeableDef.SkylightMask is not null))
+            {
+                runtime.WorldState.NotifyLightingValueChanged();
+            }
         }
     }
 
-    public void NotifyLightStateChanged(WorldEntityState entity)
+    public void NotifyLightingValueChanged(WorldEntityState entity)
     {
         if (entity.WorldSpaceKind == runtime.ActiveWorldSpaceKind)
         {
-            runtime.WorldState.NotifyLightStateChanged();
+            runtime.WorldState.NotifyLightingValueChanged();
+        }
+    }
+
+    public void NotifyLightingStructureChanged(WorldSpaceKind worldSpaceKind)
+    {
+        if (worldSpaceKind == runtime.ActiveWorldSpaceKind)
+        {
+            runtime.WorldState.NotifyLightingStructureChanged();
         }
     }
 

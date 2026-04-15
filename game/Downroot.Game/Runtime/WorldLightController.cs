@@ -1,8 +1,8 @@
 using Downroot.Core.Definitions;
 using Downroot.Core.Ids;
-using Downroot.Core.World;
 using Downroot.Gameplay.Runtime;
 using Godot;
+using NumericsVector3 = System.Numerics.Vector3;
 
 namespace Downroot.Game.Runtime;
 
@@ -12,14 +12,11 @@ public sealed partial class WorldLightController : Node2D
     private readonly CanvasModulate _canvasModulate = new();
     private Texture2D? _lightTexture;
     private GameRuntime? _runtime;
-    private WorldRuntimeFacade? _worldFacade;
-    private WorldSpaceKind? _lastWorldSpaceKind;
-    private long _lastProjectionVersion = -1;
-    private long _lastLightStateVersion = -1;
+    private long _lastLightingFieldVersion = -1;
 
     public WorldLightController()
     {
-        Name = "WorldLightController";
+        Name = "LightingPresentationController";
         ProcessMode = ProcessModeEnum.Pausable;
         _canvasModulate.Color = Colors.White;
         AddChild(_canvasModulate);
@@ -28,7 +25,6 @@ public sealed partial class WorldLightController : Node2D
     public void Initialize(GameRuntime runtime)
     {
         _runtime = runtime;
-        _worldFacade = new WorldRuntimeFacade(runtime);
         _lightTexture = CreateLightTexture();
         SynchronizeLights();
         UpdateLighting();
@@ -41,41 +37,31 @@ public sealed partial class WorldLightController : Node2D
             return;
         }
 
-        var activeWorld = _worldFacade!.GetActiveWorld();
-        if (_lastWorldSpaceKind != activeWorld.WorldSpaceKind
-            || _lastProjectionVersion != _runtime.WorldState.EntityProjectionVersion
-            || _lastLightStateVersion != _runtime.WorldState.LightStateVersion)
+        if (_lastLightingFieldVersion != _runtime.WorldState.Lighting.FieldVersion)
         {
             SynchronizeLights();
-            _lastWorldSpaceKind = activeWorld.WorldSpaceKind;
-            _lastProjectionVersion = _runtime.WorldState.EntityProjectionVersion;
-            _lastLightStateVersion = _runtime.WorldState.LightStateVersion;
+            _lastLightingFieldVersion = _runtime.WorldState.Lighting.FieldVersion;
         }
 
-        var overlayStrength = ResolveNightOverlayStrength();
-        var isNight = overlayStrength > 0.01f;
-        _canvasModulate.Color = isNight
-            ? new Color(0.26f + overlayStrength * 0.18f, 0.28f + overlayStrength * 0.16f, 0.38f + overlayStrength * 0.1f)
-            : Colors.White;
+        var field = _runtime.WorldState.Lighting.Field;
+        var outdoorSkylight = field?.OutdoorSkylightLevel ?? 1f;
+        _canvasModulate.Color = ResolveAtmosphereColor(outdoorSkylight);
 
-        foreach (var pair in _lights)
+        foreach (var emitter in _runtime.WorldState.Lighting.Emitters)
         {
-            if (!_worldFacade.TryGetActiveEntity(pair.Key, out var entity) || entity.Removed)
+            if (!_lights.TryGetValue(emitter.EntityId, out var light))
             {
                 continue;
             }
 
-            pair.Value.Enabled = isNight && EmitsLight(entity);
-            pair.Value.Visible = pair.Value.Enabled;
-            pair.Value.Position = new Vector2(entity.Position.X + 16f, entity.Position.Y + 16f);
+            ApplyEmitterVisual(light, emitter, _runtime.WorldState.TotalElapsedSeconds);
         }
     }
 
     private void SynchronizeLights()
     {
-        var desired = _runtime!.WorldState.Entities
-            .Where(entity => entity.Kind == WorldEntityKind.Placeable && EmitsPotentialLight(entity))
-            .Select(entity => entity.Id)
+        var desired = _runtime!.WorldState.Lighting.Emitters
+            .Select(emitter => emitter.EntityId)
             .ToHashSet();
 
         foreach (var stale in _lights.Keys.Where(id => !desired.Contains(id)).ToArray())
@@ -84,9 +70,9 @@ public sealed partial class WorldLightController : Node2D
             _lights.Remove(stale);
         }
 
-        foreach (var entity in _runtime.WorldState.Entities.Where(entity => entity.Kind == WorldEntityKind.Placeable && EmitsPotentialLight(entity)))
+        foreach (var emitter in _runtime.WorldState.Lighting.Emitters)
         {
-            if (!_lights.TryGetValue(entity.Id, out var light))
+            if (!_lights.TryGetValue(emitter.EntityId, out var light))
             {
                 light = new PointLight2D
                 {
@@ -95,60 +81,54 @@ public sealed partial class WorldLightController : Node2D
                     ShadowEnabled = false
                 };
                 AddChild(light);
-                _lights[entity.Id] = light;
+                _lights[emitter.EntityId] = light;
             }
 
-            ConfigureLight(light, entity);
-            light.Position = new Vector2(entity.Position.X + 16f, entity.Position.Y + 16f);
+            ConfigureLight(light, emitter);
+            ApplyEmitterVisual(light, emitter, _runtime.WorldState.TotalElapsedSeconds);
         }
     }
 
-    private void ConfigureLight(PointLight2D light, WorldEntityState entity)
+    private static void ConfigureLight(PointLight2D light, RuntimeLightEmitter emitter)
     {
-        if (_worldFacade!.IsPortalEntity(entity))
+        NumericsVector3 color = emitter.Color;
+        light.Color = new Color(color.X, color.Y, color.Z, 1f);
+        light.TextureScale = emitter.RadiusTiles * 1.18f;
+        light.Energy = 1.05f + (emitter.Intensity * 0.55f);
+    }
+
+    private static void ApplyEmitterVisual(PointLight2D light, RuntimeLightEmitter emitter, float totalElapsedSeconds)
+    {
+        var (radiusScale, energyScale) = ResolveFlicker(emitter, totalElapsedSeconds);
+        light.Enabled = emitter.IsEnabled;
+        light.Visible = emitter.IsEnabled;
+        light.Position = new Vector2((emitter.WorldTile.X * 32f) + 16f, (emitter.WorldTile.Y * 32f) + 16f);
+        light.TextureScale = emitter.RadiusTiles * 1.18f * radiusScale;
+        light.Energy = (1.05f + (emitter.Intensity * 0.55f)) * energyScale;
+    }
+
+    private static (float RadiusScale, float EnergyScale) ResolveFlicker(RuntimeLightEmitter emitter, float totalElapsedSeconds)
+    {
+        return emitter.PresentationKind switch
         {
-            light.Color = new Color(0.52f, 0.88f, 1f, 1f);
-            light.TextureScale = 7.5f;
-            light.Energy = 1.7f;
-            return;
-        }
-
-        light.Color = new Color(1f, 0.82f, 0.48f, 1f);
-        light.TextureScale = 4.6f;
-        light.Energy = 1.35f;
+            LightPresentationKind.Torch => (
+                1f + (MathF.Sin(totalElapsedSeconds * 5.2f) * 0.06f),
+                1f + (MathF.Sin((totalElapsedSeconds * 4.1f) + 1.7f) * 0.10f)),
+            LightPresentationKind.Portal => (
+                1f + (MathF.Sin((totalElapsedSeconds * 1.6f) + 0.8f) * 0.03f),
+                1f + (MathF.Sin(totalElapsedSeconds * 1.2f) * 0.04f)),
+            _ => (1f, 1f)
+        };
     }
 
-    private bool EmitsPotentialLight(WorldEntityState entity)
+    private static Color ResolveAtmosphereColor(float outdoorSkylight)
     {
-        return _worldFacade!.IsPortalEntity(entity)
-            || (_worldFacade.TryGetPlaceableDef(entity, out var placeableDef) && placeableDef.HasBehavior(PlaceableBehaviorKind.LightSource));
-    }
-
-    private bool EmitsLight(WorldEntityState entity)
-    {
-        if (_worldFacade!.IsPortalEntity(entity))
-        {
-            return true;
-        }
-
-        return _worldFacade.TryGetPlaceableDef(entity, out var placeableDef)
-            && placeableDef.HasBehavior(PlaceableBehaviorKind.LightSource)
-            && entity.PlaceableState?.IsLit == true
-            && entity.PlaceableState.FuelSecondsRemaining > 0f;
-    }
-
-    private float ResolveNightOverlayStrength()
-    {
-        var dayLength = _runtime!.BootstrapConfig.DayLengthSeconds;
-        if (dayLength <= 0f)
-        {
-            return 0f;
-        }
-
-        var timeProgress = _runtime.WorldState.TimeOfDaySeconds / dayLength;
-        var cycle = (timeProgress - 0.25f) * Mathf.Pi * 2f;
-        var nightAmount = 0.5f - (0.5f * Mathf.Cos(cycle));
-        return Mathf.Clamp(nightAmount * 0.34f, 0f, 0.34f);
+        var t = Mathf.Clamp(outdoorSkylight, 0f, 1f);
+        return new Color(
+            Mathf.Lerp(0.78f, 1f, t),
+            Mathf.Lerp(0.82f, 1f, t),
+            Mathf.Lerp(0.92f, 1f, t),
+            1f);
     }
 
     private static Texture2D CreateLightTexture()

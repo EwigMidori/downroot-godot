@@ -40,6 +40,7 @@ public sealed partial class WorldRenderer : Node2D
     private WorldSpaceKind? _lastRenderedWorldSpaceKind;
     private long _lastChunkVisualVersion = -1;
     private long _lastEntityProjectionVersion = -1;
+    private long _lastLightingFieldVersion = -1;
     private bool _showChunkBounds;
 
     public WorldRenderer(TextureContentLoader textureLoader, PlayerAnimationFactory animationFactory)
@@ -62,10 +63,11 @@ public sealed partial class WorldRenderer : Node2D
         SynchronizeChunks();
         RefreshDirtyRaisedFeatures();
         SynchronizeEntityStructure();
-        UpdateEntitySprites();
+        UpdateEntitySprites(true);
         _lastRenderedWorldSpaceKind = runtime.ActiveWorldSpaceKind;
         _lastChunkVisualVersion = _worldFacade.GetActiveWorld().ChunkVisualVersion;
         _lastEntityProjectionVersion = runtime.WorldState.EntityProjectionVersion;
+        _lastLightingFieldVersion = runtime.WorldState.Lighting.FieldVersion;
     }
 
     public void Update(InputFrame frame)
@@ -95,6 +97,8 @@ public sealed partial class WorldRenderer : Node2D
             {
                 _playerSprite.Play($"idle_{_lastFacing}");
             }
+
+            _playerSprite.Modulate = ResolvePlayerModulate();
         }
 
         using (RuntimeProfiler.Measure("WorldRenderer.SyncWorldVisuals"))
@@ -107,9 +111,16 @@ public sealed partial class WorldRenderer : Node2D
             RefreshDirtyRaisedFeatures();
         }
 
+        var lightingFieldChanged = _lastLightingFieldVersion != _runtime.WorldState.Lighting.FieldVersion;
+        if (lightingFieldChanged)
+        {
+            RefreshLightingFieldVisuals();
+            _lastLightingFieldVersion = _runtime.WorldState.Lighting.FieldVersion;
+        }
+
         using (RuntimeProfiler.Measure("WorldRenderer.UpdateEntitySprites"))
         {
-            UpdateEntitySprites();
+            UpdateEntitySprites(lightingFieldChanged);
         }
     }
 
@@ -218,7 +229,7 @@ public sealed partial class WorldRenderer : Node2D
             _terrainLayer.AddChild(boundsRoot);
             _entityLayer!.AddChild(entityRoot);
             _chunkVisuals.Add(pair.Key, new ChunkVisualState(terrainRoot, raisedFeatureRoot, entityRoot, boundsRoot));
-            BuildChunkTerrain(pair.Value.GeneratedChunk, terrainRoot);
+            BuildChunkTerrain(pair.Value.GeneratedChunk, _chunkVisuals[pair.Key]);
             BuildChunkRaisedFeatures(pair.Value, _chunkVisuals[pair.Key]);
         }
     }
@@ -247,10 +258,12 @@ public sealed partial class WorldRenderer : Node2D
         _staticEntityIds.Clear();
         _lastChunkVisualVersion = -1;
         _lastEntityProjectionVersion = -1;
+        _lastLightingFieldVersion = -1;
     }
 
-    private void BuildChunkTerrain(Downroot.World.Models.GeneratedChunk chunk, Node2D terrainRoot)
+    private void BuildChunkTerrain(Downroot.World.Models.GeneratedChunk chunk, ChunkVisualState visual)
     {
+        var terrainRoot = visual.TerrainRoot;
         var chunkOriginTile = WorldTileCoord.FromChunkAndLocal(chunk.Coord, new LocalTileCoord(0, 0), _runtime!.ChunkWidth, _runtime.ChunkHeight);
         for (var y = 0; y < chunk.Surface.Height; y++)
         {
@@ -260,13 +273,16 @@ public sealed partial class WorldRenderer : Node2D
                 var terrainDef = _runtime.Content.Terrains.Get(terrainId);
                 var worldTile = new WorldTileCoord(chunkOriginTile.X + x, chunkOriginTile.Y + y);
                 var (atlasColumn, atlasRow) = ResolveTerrainVariant(terrainDef, worldTile);
-                terrainRoot.AddChild(new Sprite2D
+                var sprite = new Sprite2D
                 {
                     Name = $"Terrain_{x}_{y}",
                     Centered = false,
                     Texture = ResolveTerrainTexture(terrainDef, atlasColumn, atlasRow),
-                    Position = new Vector2(worldTile.X * TileSize, worldTile.Y * TileSize)
-                });
+                    Position = new Vector2(worldTile.X * TileSize, worldTile.Y * TileSize),
+                    Modulate = ResolveTileBrightnessColor(worldTile)
+                };
+                terrainRoot.AddChild(sprite);
+                visual.TerrainSprites[worldTile] = sprite;
             }
         }
     }
@@ -300,8 +316,7 @@ public sealed partial class WorldRenderer : Node2D
 
     private void RefreshRaisedFeatureTile(WorldTileCoord tile, ChunkVisualState visual)
     {
-        var key = $"{tile.X},{tile.Y}";
-        if (visual.RaisedSprites.Remove(key, out var existing))
+        if (visual.RaisedSprites.Remove(tile, out var existing))
         {
             existing.QueueFree();
         }
@@ -318,10 +333,11 @@ public sealed partial class WorldRenderer : Node2D
             Centered = false,
             Texture = ResolveRaisedFeatureTexture(raisedFeature, variantIndex),
             Position = new Vector2(tile.X * TileSize, tile.Y * TileSize),
+            Modulate = ResolveTileBrightnessColor(tile),
             ZIndex = 0
         };
         visual.RaisedFeatureRoot.AddChild(sprite);
-        visual.RaisedSprites[key] = sprite;
+        visual.RaisedSprites[tile] = sprite;
     }
 
     private void CreatePlayer()
@@ -401,7 +417,7 @@ public sealed partial class WorldRenderer : Node2D
         }
     }
 
-    private void UpdateEntitySprites()
+    private void UpdateEntitySprites(bool lightingFieldChanged)
     {
         var runtime = _runtime!;
         foreach (var entityId in _dynamicEntityIds.ToArray())
@@ -421,7 +437,7 @@ public sealed partial class WorldRenderer : Node2D
                 continue;
             }
 
-            if (!NeedsStaticRefresh(entity))
+            if (!lightingFieldChanged && !NeedsStaticRefresh(entity))
             {
                 continue;
             }
@@ -645,6 +661,13 @@ public sealed partial class WorldRenderer : Node2D
 
     private Color ResolveEntityModulate(WorldEntityState entity)
     {
+        var baseColor = ResolveEntityBaseModulate(entity);
+        var brightness = ResolveEntityBrightness(entity);
+        return ApplyBrightness(baseColor, brightness);
+    }
+
+    private Color ResolveEntityBaseModulate(WorldEntityState entity)
+    {
         if (entity.HitFlashSeconds > 0f)
         {
             return new Color(1f, 0.65f, 0.65f, 1f);
@@ -659,6 +682,97 @@ public sealed partial class WorldRenderer : Node2D
         }
 
         return Colors.White;
+    }
+
+    private Color ResolvePlayerModulate()
+    {
+        var brightness = ResolveCreatureBrightness(_runtime!.Player.Position, _runtime.Content.Creatures.Get(_runtime.BootstrapConfig.PlayerCreatureId).SpriteHeight, 0.16f);
+        if (_runtime.WorldState.PlayerHitFlashSeconds > 0f)
+        {
+            return ApplyBrightness(new Color(1f, 0.72f, 0.72f, 1f), brightness);
+        }
+
+        return ApplyBrightness(Colors.White, brightness);
+    }
+
+    private void RefreshLightingFieldVisuals()
+    {
+        foreach (var visual in _chunkVisuals.Values)
+        {
+            foreach (var pair in visual.TerrainSprites)
+            {
+                pair.Value.Modulate = ResolveTileBrightnessColor(pair.Key);
+            }
+
+            foreach (var pair in visual.RaisedSprites)
+            {
+                pair.Value.Modulate = ResolveTileBrightnessColor(pair.Key);
+            }
+        }
+    }
+
+    private Color ResolveTileBrightnessColor(WorldTileCoord tile)
+    {
+        return ApplyBrightness(Colors.White, SampleBrightness(tile));
+    }
+
+    private float ResolveEntityBrightness(WorldEntityState entity)
+    {
+        return entity.Kind switch
+        {
+            WorldEntityKind.Placeable => ResolvePlaceableBrightness(entity),
+            WorldEntityKind.ResourceNode => ResolveResourceBrightness(entity),
+            WorldEntityKind.Creature => ResolveCreatureBrightness(entity.Position, _runtime!.Content.Creatures.Get(entity.DefinitionId).SpriteHeight, 0.16f),
+            WorldEntityKind.ItemDrop => ResolveItemBrightness(entity),
+            _ => 1f
+        };
+    }
+
+    private float ResolvePlaceableBrightness(WorldEntityState entity)
+    {
+        var placeableDef = _runtime!.Content.Placeables.Get(entity.DefinitionId);
+        var footWorld = new NumericsVector2(entity.Position.X + (placeableDef.SpriteWidth * 0.5f), entity.Position.Y + placeableDef.SpriteHeight - 4f);
+        return ResolveBiasedBrightness(_worldFacade!.GetWorldTile(footWorld), 0.08f);
+    }
+
+    private float ResolveResourceBrightness(WorldEntityState entity)
+    {
+        var resourceDef = _runtime!.Content.ResourceNodes.Get(entity.DefinitionId);
+        var footWorld = new NumericsVector2(entity.Position.X + (resourceDef.SpriteWidth * 0.5f), entity.Position.Y + resourceDef.SpriteHeight - 4f);
+        return ResolveBiasedBrightness(_worldFacade!.GetWorldTile(footWorld), 0.10f);
+    }
+
+    private float ResolveItemBrightness(WorldEntityState entity)
+    {
+        var itemDef = _runtime!.Content.Items.Get(entity.DefinitionId);
+        var footWorld = new NumericsVector2(entity.Position.X + (itemDef.IconWidth * 0.5f), entity.Position.Y + itemDef.IconHeight - 2f);
+        return ResolveBiasedBrightness(_worldFacade!.GetWorldTile(footWorld), 0.08f);
+    }
+
+    private float ResolveCreatureBrightness(NumericsVector2 position, int spriteHeight, float ambientBias)
+    {
+        var footWorld = new NumericsVector2(position.X + 16f, position.Y + spriteHeight - 10f);
+        return ResolveBiasedBrightness(_worldFacade!.GetWorldTile(footWorld), ambientBias);
+    }
+
+    private float ResolveBiasedBrightness(WorldTileCoord tile, float ambientBias)
+    {
+        var sampled = SampleBrightness(tile);
+        return Math.Clamp(sampled + ((1f - sampled) * ambientBias), 0f, 1f);
+    }
+
+    private float SampleBrightness(WorldTileCoord tile)
+    {
+        return _runtime!.WorldState.Lighting.Field?.SampleCombined(tile) ?? 1f;
+    }
+
+    private static Color ApplyBrightness(Color baseColor, float brightness)
+    {
+        return new Color(
+            baseColor.R * brightness,
+            baseColor.G * brightness,
+            baseColor.B * brightness,
+            baseColor.A);
     }
 
     private Texture2D ResolveCachedTexture(string key, Func<Texture2D> factory)
@@ -819,10 +933,11 @@ public sealed partial class WorldRenderer : Node2D
         Node2D RaisedFeatureRoot,
         Node2D EntityRoot,
         Node2D BoundsRoot,
-        Dictionary<string, Sprite2D> RaisedSprites)
+        Dictionary<WorldTileCoord, Sprite2D> TerrainSprites,
+        Dictionary<WorldTileCoord, Sprite2D> RaisedSprites)
     {
         public ChunkVisualState(Node2D terrainRoot, Node2D raisedFeatureRoot, Node2D entityRoot, Node2D boundsRoot)
-            : this(terrainRoot, raisedFeatureRoot, entityRoot, boundsRoot, [])
+            : this(terrainRoot, raisedFeatureRoot, entityRoot, boundsRoot, [], [])
         {
         }
     }

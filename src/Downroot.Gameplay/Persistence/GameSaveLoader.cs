@@ -57,6 +57,8 @@ public sealed class GameSaveLoader
             }
         }
 
+        runtime.WorldState.NotifyLightingStructureChanged();
+        runtime.WorldState.NotifyLightingValueChanged();
         runtime.WorldState.MarkEntityProjectionDirty();
         runtime.WorldState.RefreshEntityProjection();
     }

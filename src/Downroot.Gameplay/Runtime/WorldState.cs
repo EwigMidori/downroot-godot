@@ -24,6 +24,7 @@ public sealed class WorldState
 
             _activeWorldSpaceKind = value;
             MarkEntityProjectionDirty();
+            Lighting.SetActiveWorld(value);
         }
     }
 
@@ -43,10 +44,10 @@ public sealed class WorldState
     public FurnaceTaskState? ActiveFurnaceTask { get; set; }
     public float PlayerHitFlashSeconds { get; set; }
     public EntityId? PrimaryBedEntityId { get; set; }
+    public LightingRuntimeState Lighting { get; } = new();
     public long EntityProjectionVersion { get; private set; }
     public bool IsEntityProjectionDirty { get; private set; } = true;
     public long EntityStateVersion { get; private set; }
-    public long LightStateVersion { get; private set; }
 
     public bool IsNight(float dayLengthSeconds) => TimeOfDaySeconds >= dayLengthSeconds * 0.5f;
 
@@ -80,9 +81,14 @@ public sealed class WorldState
         EntityStateVersion++;
     }
 
-    public void NotifyLightStateChanged()
+    public void NotifyLightingStructureChanged()
     {
-        LightStateVersion++;
+        Lighting.MarkStructureDirty();
+    }
+
+    public void NotifyLightingValueChanged()
+    {
+        Lighting.MarkValueDirty();
     }
 
     public bool EnsureEntityProjectionCurrent()

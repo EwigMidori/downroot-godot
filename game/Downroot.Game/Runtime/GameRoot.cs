@@ -18,7 +18,7 @@ public partial class GameRoot : Node2D
     private PlayerAnimationFactory? _animationFactory;
     private StartupOverlayController? _startupOverlay;
     private WorldRenderer? _worldRenderer;
-    private WorldLightController? _worldLightController;
+    private WorldLightController? _lightingPresentationController;
     private HudController? _hudController;
     private CanvasLayer? _travelOverlayLayer;
     private ColorRect? _travelOverlay;
@@ -84,9 +84,9 @@ public partial class GameRoot : Node2D
             _worldRenderer = new WorldRenderer(_textureLoader, _animationFactory);
             AddChild(_worldRenderer);
             _worldRenderer.Initialize(_runtime);
-            _worldLightController = new WorldLightController();
-            AddChild(_worldLightController);
-            _worldLightController.Initialize(_runtime);
+            _lightingPresentationController = new WorldLightController();
+            AddChild(_lightingPresentationController);
+            _lightingPresentationController.Initialize(_runtime);
             InitializeTravelOverlay();
             _debugPanel = new DebugPanelController(this, _debugState!, new DebugCommandExecutor(_runtime, _debugState!, () => _saveAction?.Invoke(), () => _reloadAction?.Invoke()));
 
@@ -139,7 +139,7 @@ public partial class GameRoot : Node2D
         using (RuntimeProfiler.Measure("GameRoot.Renderer"))
         {
             _worldRenderer.Update(frame);
-            _worldLightController?.UpdateLighting();
+            _lightingPresentationController?.UpdateLighting();
         }
 
         using (RuntimeProfiler.Measure("GameRoot.Hud"))
